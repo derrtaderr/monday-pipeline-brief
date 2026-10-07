@@ -1,0 +1,34 @@
+{
+  "results": [
+    {
+      "id": "default",
+      "label": "Sales Pipeline",
+      "displayOrder": 0,
+      "archived": false,
+      "createdAt": "1970-01-01T00:00:00Z",
+      "updatedAt": "2026-06-01T12:00:00.000Z",
+      "stages": [
+        { "id": "closedlost", "label": "Closed lost", "displayOrder": 6, "archived": false, "createdAt": "1970-01-01T00:00:00Z", "updatedAt": "2026-06-01T12:00:00.000Z", "metadata": { "isClosed": "true", "probability": "0.0" } },
+        { "id": "appointmentscheduled", "label": "Discovery", "displayOrder": 0, "archived": false, "createdAt": "1970-01-01T00:00:00Z", "updatedAt": "2026-06-01T12:00:00.000Z", "metadata": { "isClosed": "false", "probability": "0.1" } },
+        { "id": "qualifiedtobuy", "label": "Qualified", "displayOrder": 1, "archived": false, "createdAt": "1970-01-01T00:00:00Z", "updatedAt": "2026-06-01T12:00:00.000Z", "metadata": { "isClosed": "false", "probability": "0.2" } },
+        { "id": "presentationscheduled", "label": "Demo", "displayOrder": 2, "archived": false, "createdAt": "1970-01-01T00:00:00Z", "updatedAt": "2026-06-01T12:00:00.000Z", "metadata": { "isClosed": "false", "probability": "0.4" } },
+        { "id": "contractsent", "label": "Signed but billing", "displayOrder": 5, "archived": false, "createdAt": "1970-01-01T00:00:00Z", "updatedAt": "2026-06-01T12:00:00.000Z", "metadata": { "isClosed": "true", "probability": "1.0" } },
+        { "id": "decisionmakerboughtin", "label": "Proposal", "displayOrder": 3, "archived": false, "createdAt": "1970-01-01T00:00:00Z", "updatedAt": "2026-06-01T12:00:00.000Z", "metadata": { "isClosed": "false", "probability": "0.6" } },
+        { "id": "123456", "label": "Won? (legacy label)", "displayOrder": 4, "archived": false, "createdAt": "1970-01-01T00:00:00Z", "updatedAt": "2026-06-01T12:00:00.000Z", "metadata": { "isClosed": "false", "probability": "0.8" } }
+      ]
+    },
+    {
+      "id": "renewals",
+      "label": "Renewals",
+      "displayOrder": 1,
+      "archived": false,
+      "createdAt": "1970-01-01T00:00:00Z",
+      "updatedAt": "2026-06-01T12:00:00.000Z",
+      "stages": [
+        { "id": "r1", "label": "Upcoming", "displayOrder": 0, "archived": false, "createdAt": "1970-01-01T00:00:00Z", "updatedAt": "2026-06-01T12:00:00.000Z", "metadata": { "isClosed": "false", "probability": "0.5" } },
+        { "id": "r2", "label": "Renewed", "displayOrder": 1, "archived": false, "createdAt": "1970-01-01T00:00:00Z", "updatedAt": "2026-06-01T12:00:00.000Z", "metadata": { "isClosed": "true", "probability": "1.0" } },
+        { "id": "r3", "label": "Churned", "displayOrder": 2, "archived": false, "createdAt": "1970-01-01T00:00:00Z", "updatedAt": "2026-06-01T12:00:00.000Z", "metadata": { "isClosed": "true", "probability": "0.0" } }
+      ]
+    }
+  ]
+}

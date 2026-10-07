@@ -1,0 +1,24 @@
+{
+  "name": "monday-pipeline-brief",
+  "version": "0.1.0",
+  "description": "The weekly what-changed HubSpot pipeline brief your CRM cannot produce. Runs on your side, zero dependencies.",
+  "type": "module",
+  "bin": {
+    "monday-brief": "bin/monday-brief.mjs"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "demo/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test",
+    "lint": "node scripts/lint.mjs"
+  },
+  "license": "MIT"
+}

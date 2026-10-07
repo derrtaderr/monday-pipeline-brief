@@ -1,0 +1,7 @@
+{
+  "results": [
+    { "id": "101", "email": "dana@example.com", "firstName": "Dana", "lastName": "Ruiz", "userId": 9001, "type": "PERSON", "createdAt": "2025-01-15T10:00:00.000Z", "updatedAt": "2026-09-01T10:00:00.000Z", "archived": false },
+    { "id": "102", "email": "leo@example.com", "firstName": "Leo", "lastName": "", "userId": 9002, "type": "PERSON", "createdAt": "2025-01-15T10:00:00.000Z", "updatedAt": "2026-09-01T10:00:00.000Z", "archived": false },
+    { "id": "103", "email": "nofirst@example.com", "firstName": "", "lastName": "", "userId": 9003, "type": "PERSON", "createdAt": "2025-01-15T10:00:00.000Z", "updatedAt": "2026-09-01T10:00:00.000Z", "archived": false }
+  ]
+}

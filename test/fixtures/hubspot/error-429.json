@@ -1,0 +1,6 @@
+{
+  "status": "error",
+  "message": "You have reached your secondly limit.",
+  "correlationId": "5a7b9c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d",
+  "category": "RATE_LIMITS"
+}

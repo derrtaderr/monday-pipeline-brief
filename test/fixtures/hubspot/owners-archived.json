@@ -1,0 +1,5 @@
+{
+  "results": [
+    { "id": "199", "email": "former@example.com", "firstName": "Morgan", "lastName": "Ex", "userId": 9099, "type": "PERSON", "createdAt": "2025-01-15T10:00:00.000Z", "updatedAt": "2026-09-01T10:00:00.000Z", "archived": true }
+  ]
+}

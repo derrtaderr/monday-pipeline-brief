@@ -1,0 +1,222 @@
+[
+ {
+  "id": "D100",
+  "name": "Northwind",
+  "owner": "Dana",
+  "stage": "Qualified",
+  "amount": 75000,
+  "close_date": "2026-12-02",
+  "next_step": "Pricing call",
+  "next_step_date": "2026-10-14",
+  "status": "open"
+ },
+ {
+  "id": "D101",
+  "name": "Brightline",
+  "owner": "Priya",
+  "stage": "Demo",
+  "amount": 18000,
+  "close_date": "2026-12-07",
+  "next_step": "Pricing call",
+  "next_step_date": "2026-10-07",
+  "status": "open"
+ },
+ {
+  "id": "D102",
+  "name": "Halcyon",
+  "owner": "Leo",
+  "stage": "Proposal",
+  "amount": 24000,
+  "close_date": "2026-10-03",
+  "next_step": "Champion intro",
+  "next_step_date": "2026-10-12",
+  "status": "open"
+ },
+ {
+  "id": "D103",
+  "name": "Cobalt Labs",
+  "owner": "Priya",
+  "stage": "Negotiation",
+  "amount": 24000,
+  "close_date": "2026-10-21",
+  "next_step": "Champion intro",
+  "next_step_date": "2026-10-06",
+  "status": "open"
+ },
+ {
+  "id": "D104",
+  "name": "Fernway",
+  "owner": "Leo",
+  "stage": "Proposal",
+  "amount": 40000,
+  "close_date": "2026-10-18",
+  "next_step": "Security review",
+  "next_step_date": "2026-10-10",
+  "status": "open"
+ },
+ {
+  "id": "D105",
+  "name": "Quarry",
+  "owner": "Leo",
+  "stage": "Qualified",
+  "amount": 120000,
+  "close_date": "2026-10-19",
+  "next_step": "Demo w/ CFO",
+  "next_step_date": "2026-10-14",
+  "status": "open"
+ },
+ {
+  "id": "D106",
+  "name": "Tessellate",
+  "owner": "Marcus",
+  "stage": "Discovery",
+  "amount": 40000,
+  "close_date": "2026-11-04",
+  "next_step": "Champion intro",
+  "next_step_date": "2026-10-07",
+  "status": "open"
+ },
+ {
+  "id": "D107",
+  "name": "Oakmont",
+  "owner": "Priya",
+  "stage": "Qualified",
+  "amount": 40000,
+  "close_date": "2026-11-22",
+  "next_step": "Champion intro",
+  "next_step_date": "2026-10-12",
+  "status": "open"
+ },
+ {
+  "id": "D108",
+  "name": "Lumen Health",
+  "owner": "Dana",
+  "stage": "Proposal",
+  "amount": 90000,
+  "close_date": "2026-11-10",
+  "next_step": "Security review",
+  "next_step_date": "2026-10-08",
+  "status": "open"
+ },
+ {
+  "id": "D109",
+  "name": "Arcadia",
+  "owner": "Marcus",
+  "stage": "Discovery",
+  "amount": 48000,
+  "close_date": "2026-12-16",
+  "next_step": "Demo w/ CFO",
+  "next_step_date": "2026-10-13",
+  "status": "open"
+ },
+ {
+  "id": "D110",
+  "name": "Pinecrest",
+  "owner": "Dana",
+  "stage": "Demo",
+  "amount": 24000,
+  "close_date": "2026-10-17",
+  "next_step": "Send proposal",
+  "next_step_date": "2026-10-08",
+  "status": "open"
+ },
+ {
+  "id": "D111",
+  "name": "Vantage Freight",
+  "owner": "Dana",
+  "stage": "Qualified",
+  "amount": 90000,
+  "close_date": "2026-11-02",
+  "next_step": "Pricing call",
+  "next_step_date": "2026-10-14",
+  "status": "open"
+ },
+ {
+  "id": "D112",
+  "name": "Driftwood",
+  "owner": "Dana",
+  "stage": "Proposal",
+  "amount": 60000,
+  "close_date": "2026-12-16",
+  "next_step": "Champion intro",
+  "next_step_date": "2026-10-13",
+  "status": "open"
+ },
+ {
+  "id": "D113",
+  "name": "Kestrel",
+  "owner": "Priya",
+  "stage": "Discovery",
+  "amount": 48000,
+  "close_date": "2026-11-23",
+  "next_step": "Pricing call",
+  "next_step_date": "2026-10-06",
+  "status": "open"
+ },
+ {
+  "id": "D114",
+  "name": "Meridian",
+  "owner": "Dana",
+  "stage": "Negotiation",
+  "amount": 90000,
+  "close_date": "2026-11-23",
+  "next_step": "Send proposal",
+  "next_step_date": "2026-10-16",
+  "status": "open"
+ },
+ {
+  "id": "D115",
+  "name": "Sable",
+  "owner": "Dana",
+  "stage": "Discovery",
+  "amount": 90000,
+  "close_date": "2026-11-06",
+  "next_step": "Champion intro",
+  "next_step_date": "2026-10-07",
+  "status": "open"
+ },
+ {
+  "id": "D116",
+  "name": "Juniper Bio",
+  "owner": "Leo",
+  "stage": "Discovery",
+  "amount": 40000,
+  "close_date": "2026-11-05",
+  "next_step": "Security review",
+  "next_step_date": "2026-10-12",
+  "status": "open"
+ },
+ {
+  "id": "D117",
+  "name": "Ironclad Ops",
+  "owner": "Leo",
+  "stage": "Proposal",
+  "amount": 24000,
+  "close_date": "2026-10-15",
+  "next_step": "Send proposal",
+  "next_step_date": "2026-10-14",
+  "status": "open"
+ },
+ {
+  "id": "D118",
+  "name": "Westfield",
+  "owner": "Dana",
+  "stage": "Qualified",
+  "amount": 75000,
+  "close_date": "2026-12-09",
+  "next_step": "Send proposal",
+  "next_step_date": "2026-10-11",
+  "status": "open"
+ },
+ {
+  "id": "D119",
+  "name": "Orchard AI",
+  "owner": "Leo",
+  "stage": "Qualified",
+  "amount": 32000,
+  "close_date": "2026-10-06",
+  "next_step": "Security review",
+  "next_step_date": "2026-10-09",
+  "status": "open"
+ }
+]

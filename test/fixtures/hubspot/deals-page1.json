@@ -1,0 +1,7 @@
+{
+  "results": [
+    { "id": "5001", "properties": { "dealname": "Northwind", "amount": "75000", "closedate": "2026-12-02T17:00:00.000Z", "dealstage": "qualifiedtobuy", "pipeline": "default", "hubspot_owner_id": "101", "hs_next_step": "Pricing call", "notes_last_updated": "2026-10-01T15:30:00.000Z", "hs_object_id": "5001" }, "createdAt": "2026-08-03T14:00:00.000Z", "updatedAt": "2026-10-02T09:15:00.000Z", "archived": false },
+    { "id": "5002", "properties": { "dealname": "Halcyon", "amount": "24000.50", "closedate": "2026-12-19T17:00:00.000Z", "dealstage": "123456", "pipeline": "default", "hubspot_owner_id": "102", "hs_next_step": "   ", "notes_last_updated": null, "hs_object_id": "5002" }, "createdAt": "2026-08-03T14:00:00.000Z", "updatedAt": "2026-10-02T09:15:00.000Z", "archived": false }
+  ],
+  "paging": { "next": { "after": "5002", "link": "https://api.hubapi.com/crm/v3/objects/deals?after=5002" } }
+}
