@@ -6,7 +6,7 @@ const BASE = 'https://api.hubapi.com';
 const MAX_RETRIES = 5;
 const MAX_WAIT_SECONDS = 60;
 export const DEAL_PROPERTIES = [
-  'dealname', 'amount', 'amount_in_home_currency', 'closedate', 'dealstage', 'pipeline', 'hubspot_owner_id', 'hs_next_step', 'notes_last_updated',
+  'dealname', 'amount', 'amount_in_home_currency', 'closedate', 'dealstage', 'pipeline', 'hubspot_owner_id', 'hs_next_step', 'notes_last_updated', 'createdate',
 ];
 
 export class HubSpotError extends Error {
@@ -19,10 +19,10 @@ export class HubSpotError extends Error {
 
 function errorFor(status, path) {
   if (status === 401) {
-    return new HubSpotError('HubSpot rejected the token (401). Check that HUBSPOT_TOKEN holds a current private app access token for this portal.', 401);
+    return new HubSpotError('HubSpot rejected the token (401). Check that HUBSPOT_TOKEN holds a current HubSpot service key or private app token for this portal.', 401);
   }
   if (status === 403) {
-    return new HubSpotError(`HubSpot refused ${path} (403). The private app needs the crm.objects.deals.read and crm.objects.owners.read scopes.`, 403);
+    return new HubSpotError(`HubSpot refused ${path} (403). The HubSpot service key or private app needs the crm.objects.deals.read and crm.objects.owners.read scopes.`, 403);
   }
   if (status === 429) return new HubSpotError(`HubSpot kept rate limiting ${path} (429) after ${MAX_RETRIES} retries. Try again in a few minutes.`, 429);
   return new HubSpotError(`HubSpot request to ${path} failed with status ${status}.`, status);
@@ -30,14 +30,15 @@ function errorFor(status, path) {
 
 const retryable = (status) => status === 429 || status >= 500;
 
-// A HubSpot private app token is printable ASCII with no spaces or quotes. Anything else
-// (smart quotes, a stray space, a non-ASCII letter, usually from copying out of a document)
-// can never be sent as a header, so it is rejected before any request.
+// A HubSpot service key or private app token (pat-<region>-..., any region) is printable ASCII
+// with no spaces or quotes. Anything else (smart quotes, a stray space, a non-ASCII letter,
+// usually from copying out of a document) can never be sent as a header, so it is rejected
+// before any request.
 export function validToken(token) {
   return typeof token === 'string' && /^[\x21-\x7e]+$/.test(token) && !/["'`]/.test(token);
 }
 
-export const BAD_TOKEN_MESSAGE = 'HUBSPOT_TOKEN has characters a HubSpot token never has (smart quotes, spaces or non-ASCII letters, usually from copying it out of a document or chat). Copy the token again from the private app page and paste the raw token, with no quotes inside the value (export HUBSPOT_TOKEN=pat-... is fine).';
+export const BAD_TOKEN_MESSAGE = 'HUBSPOT_TOKEN has characters a HubSpot token never has (smart quotes, spaces or non-ASCII letters, usually from copying it out of a document or chat). Copy the token again from the service key (or private app) page in HubSpot and paste the raw token, with no quotes inside the value (export HUBSPOT_TOKEN=pat-... is fine).';
 
 export function createHubSpotClient({ token, fetch = globalThis.fetch, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), baseUrl = BASE }) {
   async function get(path, params = {}) {

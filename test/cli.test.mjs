@@ -46,6 +46,12 @@ test('help and no arguments print usage', async () => {
   }
 });
 
+test('usage names the token as a HubSpot service key or private app token', async () => {
+  const r = await run(['help']);
+  assert.match(r.out, /HUBSPOT_TOKEN\s+HubSpot service key or private app token \(scopes crm\.objects\.deals\.read, crm\.objects\.owners\.read\)/);
+  assert.doesNotMatch(r.out, /Private app access token/);
+});
+
 test('an unknown command exits 1 with usage on stderr', async () => {
   const r = await run(['frobnicate']);
   assert.equal(r.code, 1);
@@ -56,6 +62,7 @@ test('run without HUBSPOT_TOKEN exits 1 and says how to fix it', async () => {
   const r = await run(['run']);
   assert.equal(r.code, 1);
   assert.match(r.err, /HUBSPOT_TOKEN is not set/);
+  assert.match(r.err, /Create a HubSpot service key \(or a private app on older accounts\)/);
   assert.match(r.err, /run: node bin\/monday-brief\.mjs demo/);
   assert.equal(r.fetch.calls.length, 0);
 });
@@ -83,6 +90,33 @@ test('a later run compares against the newest earlier snapshot', async () => {
   assert.match(r.out, /Compared with the snapshot from Sep 28\./);
   assert.match(r.out, /- Northwind, \$75K, Dana Ruiz: Nov 2 → Dec 2 \(\+30 days\)/);
   assert.match(r.out, /- Northwind, \$75K, Dana Ruiz: Demo → Qualified/);
+});
+
+// The first real-portal run: few activities logged, deals created that day. A 0.1.0 snapshot
+// (no `created` field) is the baseline, so old snapshots keep working.
+test('a real-shaped portal with little logged activity: only honest stale flags, against a 0.1.0 baseline', async () => {
+  const dir = tmp();
+  writeSnapshot(dir, {
+    schema: 1, taken_at: '2026-09-28T07:00:00.000Z', date: '2026-09-28', source: 'hubspot',
+    deals: [{ id: '900000000102', name: 'Copperfield Supply', owner: 'Leo', pipeline_id: 'default', pipeline: 'Sales Pipeline', stage_id: 'presentationscheduled', stage: 'Demo', stage_order: 2, status: 'open', amount: 42000, close_date: '2026-11-20', next_step: 'Send pricing', last_activity: null }],
+  });
+  const routes = happyRoutes();
+  routes['/crm/v3/objects/deals'] = [() => respond(200, fixture('deals-real-shape.json'))];
+  const r = await run(['run', '--dir', dir], { env: { HUBSPOT_TOKEN: TOKEN }, fetch: fakeFetch(routes) });
+  assert.equal(r.code, 0, r.err);
+  assert.match(r.out, /Compared with the snapshot from Sep 28\./);
+  const section = (title) => r.out.split(`**${title}**`)[1]?.split('\n\n')[0] ?? '';
+  assert.deepEqual(section('No next step, or no activity in 14+ days').split('\n').slice(1), [
+    '- Larkspur Analytics, $60K, Dana Ruiz: no next step',
+    '- Copperfield Supply, $42K, Leo: no activity logged since it was created Sep 20',
+    '- Bramblewood Cafe, $1K, Unassigned: no next step',
+  ]);
+  assert.deepEqual(section('Look at these first').split('\n').slice(1), [
+    '- Copperfield Supply, $42K, Leo: close date slipped, no activity in 14+ days',
+  ]);
+  assert.doesNotMatch(r.out, /next step set, no activity logged/);
+  const snap = JSON.parse(readFileSync(join(dir, 'snapshot-2026-10-05.json'), 'utf8'));
+  assert.equal(snap.deals.find((d) => d.id === '900000000101').created, '2026-10-05');
 });
 
 test('the snapshot directory comes from --dir, then MONDAY_BRIEF_DIR, then ~/.monday-pipeline-brief', async () => {

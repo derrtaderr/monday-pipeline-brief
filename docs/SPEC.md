@@ -11,7 +11,8 @@ by hand. This tool keeps the weekly history on the user's own disk and writes th
 
 ## Scope (v1)
 
-1. Read HubSpot deals with the user's own private-app token from the `HUBSPOT_TOKEN` env var.
+1. Read HubSpot deals with the user's own HubSpot service key or private app token from the
+   `HUBSPOT_TOKEN` env var.
    Paginate (`paging.next.after`), back off on 429 (honour `Retry-After`, else exponential),
    retry 5xx the same way, give up after 5 retries with a plain error.
 2. Resolve stage IDs to labels and stage order via `GET /crm/v3/pipelines/deals`, and owner IDs
@@ -64,7 +65,7 @@ node bin/monday-brief.mjs help
       "pipeline_id": "default", "pipeline": "Sales Pipeline",
       "stage_id": "qualifiedtobuy", "stage": "Qualified", "stage_order": 1,
       "status": "open", "amount": 75000, "close_date": "2026-12-02",
-      "next_step": "Pricing call", "last_activity": "2026-10-01"
+      "next_step": "Pricing call", "last_activity": "2026-10-01", "created": "2026-08-03"
     }
   ]
 }
@@ -354,3 +355,84 @@ The lint gate fails on home-directory paths and on review-log language anywhere 
 
 Out of scope (README limitations): deleted deals, pipeline moves, pruning old closed deals,
 failure notification under cron beyond the log location.
+
+## Real-portal fixes (v0.1.1)
+
+v0.1.0 was run against a real HubSpot portal for the first time: a free account in the na2
+region, a custom pipeline, 22 seeded test deals and a simulated week of changes. Every stage
+move, slipped close date, close, new deal and next step change was reported correctly. The run
+found two problems that no recorded fixture could show.
+
+### 1. A portal with little logged activity flagged every deal as stale
+
+`notes_last_updated` is null until someone logs a call, email, meeting or note on the deal. On
+that portal every open deal was flagged, including a deal created minutes before the run, which
+was listed under "no activity in 14+ days". Those flags also pushed deals into "Look at these
+first".
+
+The rule, for open deals:
+
+- **No next step** (with the next step check on): `hs_next_step` is empty. This flags whatever
+  the deal's age.
+- **No activity in 14+ days**: the next step is set (or the check is off), and either
+  - `notes_last_updated` is set and 14 or more days before the brief date, or
+  - `notes_last_updated` is missing, and the deal was created 14 or more days before the brief
+    date. The brief says "no activity logged since it was created Sep 20", which is what is
+    actually known. A deal created less than 14 days ago with no logged activity is not stale.
+  - If the creation date is also missing (HubSpot did not return it), the deal is flagged as
+    before ("next step set, no activity logged").
+
+**Decision: a brand-new deal with no next step is still flagged.** The fix is about activity,
+which a new deal has not had time to log. A next step is different: it is the one field that
+says what happens next, filling it takes a rep seconds, and a deal entered without one is
+exactly the gap the section exists to show. Making the next step rule depend on age would add a
+second clock to the brief and hide new deals the manager most wants to see shaped early. So the
+rule stays simple: empty next step, flagged, any age.
+
+**Look at these first** needs more than one warning. A deal new since the previous snapshot can
+carry at most one (it has no earlier close date or stage to slip or move back from), and a deal
+created less than 14 days ago no longer gets the activity warning, so a young deal cannot land
+there just because nothing is logged yet.
+
+**Where the creation date comes from.** The client requests the `createdate` deal property and
+the snapshot stores it as `created` (a `YYYY-MM-DD` day). When `createdate` is missing, the
+snapshot uses the record's top-level `createdAt`. The published deals spec names five default
+properties (`dealname`, `amount`, `closedate`, `pipeline`, `dealstage`), and `createdate` is not
+one of them, so it is requested by name like the others the tool reads. The spec does document
+`createdAt` on every deal record as a required date-time, "the timestamp when the object was
+created", which is why it is the fallback. A contract test holds both facts. On the real portal
+`createdate` and `createdAt` held the same value.
+
+**Snapshot shape.** Each deal gains one field, `created` (a day, or null). The schema stays 1:
+the field is additive, and only today's freshly built snapshot is read for the stale check, so
+an older snapshot without `created` still loads and still serves as the comparison baseline. A
+test reads an old-shape snapshot as the baseline to hold that.
+
+**Real response shape.** A fixture modelled on the real response (sanitized: fictional names,
+fake ids, a fake portal id) carries what the hand-recorded fixtures did not: a top-level `url`
+on each deal, string amounts, null rather than empty strings for unset properties, and ISO dates
+with milliseconds. It validates against the spec (which documents `url`) and the client turns
+it into a correct snapshot.
+
+### 2. New HubSpot accounts cannot create private apps
+
+On a new account, Settings, Development, Legacy Apps says legacy apps are not available and
+offers "Create a service key" and "Create a project-based app". A service key works with the
+tool unchanged: it is a `pat-<region>-...` token sent as `Authorization: Bearer`, and the deals,
+pipelines and owners endpoints all returned 200 with the same two read scopes. The token check
+accepts any printable token, so `pat-na1-`, `pat-na2-`, `pat-eu1-` and other regions all pass; a
+test holds that.
+
+- The README quickstart leads with the service key path and keeps a short private app path for
+  older accounts that still offer it. It never sends users to a project-based app. The service
+  key page lists scopes by their API names, so the README names exactly `crm.objects.deals.read`
+  and `crm.objects.owners.read` (no write scope), and says how to revoke: open the key under
+  Service Keys and press Delete.
+- Every message that said "private app" now says "HubSpot service key or private app token" (or
+  the equivalent), because either one works.
+
+### Release
+
+`package.json` goes to 0.1.1, and `CHANGELOG.md` records v0.1.0 and v0.1.1. The README says the
+tool has now been run on one real HubSpot portal, with a custom pipeline, on a service key, with
+test data.

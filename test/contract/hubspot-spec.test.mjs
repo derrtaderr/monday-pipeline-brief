@@ -49,7 +49,7 @@ const nullPropertyValue = (path) => /^\$\.results\[\d+\]\.properties\.[^.[\]]+$/
 
 test('recorded deal pages match the GET /crm/v3/objects/0-3 response schema', { skip }, () => {
   const spec = loadSpec('deals');
-  for (const name of ['deals-page1.json', 'deals-page2.json']) {
+  for (const name of ['deals-page1.json', 'deals-page2.json', 'deals-real-shape.json']) {
     assert.deepEqual(validate(ok200(spec, '/crm/v3/objects/0-3'), fixture(name), spec, { allowNull: nullPropertyValue }), [], name);
   }
 });
@@ -156,6 +156,21 @@ test('paging is paging.next.after in the deals and owners specs, and the client 
   await createHubSpotClient({ token: ['pat', 'na1', '00000000-0000-0000-0000-000000000000'].join('-'), fetch, sleep: async () => {} }).listDeals();
   const cursors = fetch.calls.map((c) => new URL(c.url).searchParams.get('after'));
   assert.deepEqual(cursors, [null, fixture('deals-page1.json').paging.next.after]);
+});
+
+// The stale check needs each deal's creation date. `createdate` is not one of the five default
+// deal properties the spec names, so the client requests it by name; the spec does document a
+// top-level `createdAt` on every deal record as a required date-time, which the snapshot uses
+// when `createdate` is missing.
+test('the creation date: createdate is requested by name, and createdAt is a required, documented date-time on every deal', { skip }, () => {
+  const spec = loadSpec('deals');
+  assert.doesNotMatch(spec.info.description, /\|\s*`deals`\s*\|[^\n]*`createdate`/, 'createdate is now a documented default; the explicit request can be reconsidered');
+  assert.ok(DEAL_PROPERTIES.includes('createdate'), 'createdate is requested by name');
+  const deal = spec.components.schemas.SimplePublicObjectWithAssociations;
+  assert.ok(deal.required.includes('createdAt'));
+  assert.equal(deal.properties.createdAt.type, 'string');
+  assert.equal(deal.properties.createdAt.format, 'date-time');
+  assert.match(deal.properties.createdAt.description, /created/i);
 });
 
 // The spec documents `probability` but not `isClosed`, which the tool reads to tell open from

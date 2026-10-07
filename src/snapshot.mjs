@@ -73,6 +73,8 @@ export function buildSnapshot({ deals, pipelines, owners, takenAt, date, source 
         close_date: isoDay(p.closedate),
         next_step: (p.hs_next_step ?? '').trim(),
         last_activity: isoDay(p.notes_last_updated),
+        // The createdate property, else the record's createdAt (required by HubSpot's spec).
+        created: isoDay(p.createdate ?? d.createdAt),
       };
     }),
   };

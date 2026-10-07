@@ -18,6 +18,18 @@ test('listDeals follows paging.next.after until the last page', async () => {
   assert.deepEqual(fetch.calls.map((x) => x.key), ['/crm/v3/objects/deals', '/crm/v3/objects/deals?after=5002']);
 });
 
+// Modelled on a real HubSpot response (sanitized): string amounts, null for unset properties,
+// ISO dates with milliseconds, and a top-level `url` the hand-recorded pages lack.
+test('listDeals accepts a real-shaped deals page, including the top-level url field', async () => {
+  const routes = happyRoutes();
+  routes['/crm/v3/objects/deals'] = [() => respond(200, fixture('deals-real-shape.json'))];
+  const { c, fetch } = client(routes);
+  const deals = await c.listDeals();
+  assert.equal(deals.length, 4);
+  assert.equal(fetch.calls.length, 1, 'no paging key, so one request');
+  assert.match(deals[0].url, /^https:\/\/app-na2\.hubspot\.com\//);
+});
+
 test('listDeals asks for 100 per page and exactly the properties the brief uses', async () => {
   const { c, fetch } = client(happyRoutes());
   await c.listDeals();
@@ -25,7 +37,7 @@ test('listDeals asks for 100 per page and exactly the properties the brief uses'
   assert.equal(u.origin, 'https://api.hubapi.com');
   assert.equal(u.searchParams.get('limit'), '100');
   assert.deepEqual(u.searchParams.get('properties').split(',').sort(), [
-    'amount', 'amount_in_home_currency', 'closedate', 'dealname', 'dealstage', 'hs_next_step', 'hubspot_owner_id', 'notes_last_updated', 'pipeline',
+    'amount', 'amount_in_home_currency', 'closedate', 'createdate', 'dealname', 'dealstage', 'hs_next_step', 'hubspot_owner_id', 'notes_last_updated', 'pipeline',
   ]);
 });
 
@@ -104,17 +116,18 @@ test('a 401 fails at once with a message about the token, without the token', as
   await assert.rejects(c.listDeals(), (err) => {
     assert.equal(err.status, 401);
     assert.match(err.message, /HUBSPOT_TOKEN/);
+    assert.match(err.message, /a current HubSpot service key or private app token for this portal/);
     assert.ok(!err.message.includes(TOKEN));
     return true;
   });
   assert.equal(fetch.calls.length, 1);
 });
 
-test('a 403 names the scopes the private app needs', async () => {
+test('a 403 names the scopes the service key or private app needs', async () => {
   const routes = happyRoutes();
   routes['/crm/v3/owners'] = [() => respond(403, fixture('error-403.json'))];
   const { c } = client(routes);
-  await assert.rejects(c.listOwners(), /crm\.objects\.owners\.read/);
+  await assert.rejects(c.listOwners(), /The HubSpot service key or private app needs the crm\.objects\.deals\.read and crm\.objects\.owners\.read scopes/);
 });
 
 test('a network failure becomes a plain HubSpotError', async () => {
@@ -156,15 +169,19 @@ for (const [name, bad] of [
   });
 }
 
-test('validToken accepts a real-shaped private app token', async () => {
+test('validToken accepts a real-shaped token from any HubSpot region', async () => {
   const { validToken } = await import('../src/hubspot.mjs');
   assert.equal(validToken(TOKEN), true);
+  for (const region of ['na1', 'na2', 'eu1', 'ap1']) {
+    assert.equal(validToken(['pat', region, '11111111-2222-3333-4444-555555555555'].join('-')), true, region);
+  }
   assert.equal(validToken('“pat”'), false);
 });
 
 test('the bad-token hint says to paste the raw token with no quotes inside the value', async () => {
   const { BAD_TOKEN_MESSAGE } = await import('../src/hubspot.mjs');
   assert.match(BAD_TOKEN_MESSAGE, /paste the raw token/i);
+  assert.match(BAD_TOKEN_MESSAGE, /from the service key \(or private app\) page in HubSpot/);
   assert.match(BAD_TOKEN_MESSAGE, /no quotes inside the value/);
   assert.doesNotMatch(BAD_TOKEN_MESSAGE, /plain straight quotes/);
 });

@@ -41,7 +41,7 @@ Usage:
       Show this help.
 
 Environment:
-  HUBSPOT_TOKEN       Private app access token (scopes crm.objects.deals.read, crm.objects.owners.read). Required for run.
+  HUBSPOT_TOKEN       HubSpot service key or private app token (scopes crm.objects.deals.read, crm.objects.owners.read). Required for run.
   SLACK_WEBHOOK_URL   Optional Slack incoming webhook. When set, run also posts the brief there.
   MONDAY_BRIEF_DIR    Snapshot folder when --dir is not given. Default ~/.monday-pipeline-brief
   MONDAY_BRIEF_NEXT_STEP=off   Same as --no-next-step (handy in a scheduled job's env file).
@@ -162,7 +162,7 @@ async function runInner(flags, ctx, dir) {
   const { env, stdout, stderr } = ctx;
   const token = env.HUBSPOT_TOKEN?.trim();
   if (!token) {
-    stderr.write(`HUBSPOT_TOKEN is not set. Create a HubSpot private app (see the README quickstart), then export HUBSPOT_TOKEN.\nTo see a sample brief without a token, run: ${ctx.invocation ?? DEFAULT_INVOCATION} demo\n`);
+    stderr.write(`HUBSPOT_TOKEN is not set. Create a HubSpot service key (or a private app on older accounts) as the README quickstart shows, then export HUBSPOT_TOKEN.\nTo see a sample brief without a token, run: ${ctx.invocation ?? DEFAULT_INVOCATION} demo\n`);
     return 1;
   }
   if (!validToken(token)) {

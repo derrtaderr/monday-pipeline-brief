@@ -88,6 +88,40 @@ test('stale: open deals with no next step, or no activity in 14 or more days', (
   assert.equal(r.stale.find((s) => s.deal.id === 'old').reason, 'no-activity');
 });
 
+test('no logged activity: a deal created under 14 days ago is not stale, one created 14+ days ago is', () => {
+  const r = compare(null, snap(TODAY, [
+    deal({ id: 'today', last_activity: null, created: TODAY }),
+    deal({ id: 'thirteen', last_activity: null, created: '2026-09-22' }),
+    deal({ id: 'fourteen', last_activity: null, created: '2026-09-21' }),
+    deal({ id: 'unknown-age', last_activity: null }),
+  ]), TODAY);
+  assert.deepEqual(ids(r.stale).sort(), ['fourteen', 'unknown-age']);
+  assert.ok(r.stale.every((s) => s.reason === 'no-activity'));
+});
+
+test('a logged activity still decides staleness whatever the deal age', () => {
+  const r = compare(null, snap(TODAY, [deal({ id: 'young-old-activity', created: '2026-09-30', last_activity: '2026-09-01' })]), TODAY);
+  assert.deepEqual(ids(r.stale), ['young-old-activity']);
+});
+
+test('an empty next step is flagged on a brand-new deal; with the check off it is not', () => {
+  const fresh = [deal({ id: 'new', next_step: '', last_activity: null, created: TODAY })];
+  const on = compare(null, snap(TODAY, fresh), TODAY);
+  assert.deepEqual(on.stale.map((s) => [s.deal.id, s.reason]), [['new', 'no-next-step']]);
+  assert.deepEqual(compare(null, snap(TODAY, fresh), TODAY, { nextStep: false }).stale, []);
+});
+
+test('a young deal with no logged activity cannot reach look at these first on a slip alone', () => {
+  const r = compare(
+    snap('2026-09-28', [deal({ id: 'young', close_date: '2026-10-20', last_activity: null, created: '2026-09-25' })]),
+    snap(TODAY, [deal({ id: 'young', close_date: '2026-11-20', last_activity: null, created: '2026-09-25' })]),
+    TODAY,
+  );
+  assert.deepEqual(ids(r.slipped), ['young']);
+  assert.deepEqual(r.stale, []);
+  assert.deepEqual(r.lookFirst, []);
+});
+
 test('new this week: deals absent from the previous snapshot', () => {
   const r = compare(snap('2026-09-28', [deal({ id: 'a' })]), snap(TODAY, [deal({ id: 'a' }), deal({ id: 'b' })]), TODAY);
   assert.deepEqual(ids(r.newDeals), ['b']);

@@ -19,7 +19,7 @@ not necessarily a developer.
 ## Happy path
 
 1. Runs `demo`. Sees the full sample brief in the terminal, exit 0. Decides it is worth 5 minutes.
-2. Creates a HubSpot private app with `crm.objects.deals.read` and `crm.objects.owners.read`, copies the `pat-` token.
+2. Creates a HubSpot service key (or, on older accounts, a private app) with `crm.objects.deals.read` and `crm.objects.owners.read`, copies the `pat-` token.
 3. `export HUBSPOT_TOKEN=...`, runs `run`.
 4. **First run state (one snapshot).** Brief says "This is the first snapshot. A comparison needs two weekly runs, so the week-over-week sections start next week.", shows the open pipeline total and the "No next step, or no activity in 14+ days" list. Writes `~/.monday-pipeline-brief/snapshot-DATE.json` and `brief-DATE.md` (the same folder scheduled runs use) and appends a line to `run.log`. stderr: `Saved ... in <dir>`. Exit 0.
 5. Schedules it weekly using the README's cron or launchd block.
@@ -40,11 +40,11 @@ not necessarily a developer.
 | Same-day re-run | Today's snapshot overwritten; still compares with the same earlier baseline | 0 | snapshot (overwritten), brief (overwritten), run.log line |
 | Ad-hoc mid-week run, then the scheduled run | The scheduled brief compares with the newest snapshot at least 6 days old, not the mid-week one; with none that old, the newest earlier one | 0 | snapshot, brief, run.log line |
 | Skipped week(s) (machine asleep or off, job missed) | Compares with the newest snapshot at least 6 days old. A gap of 6 to 8 days reads "last week"; any other gap reads "Compared with the snapshot from Sep 21, 2 weeks ago.", "up $39K since Sep 21", "New since Sep 21", "Nothing flagged since Sep 21.", and the heading drops "week of" | 0 | snapshot, brief, run.log line |
-| Missing token | "HUBSPOT_TOKEN is not set. Create a HubSpot private app (see the README quickstart)..." and a pointer to `demo` | 1 | run.log line only |
+| Missing token | "HUBSPOT_TOKEN is not set. Create a HubSpot service key (or a private app on older accounts) as the README quickstart shows..." and a pointer to `demo` | 1 | run.log line only |
 | Malformed token (smart quotes, spaces, non-ASCII) | "HUBSPOT_TOKEN has characters a HubSpot token never has (smart quotes, spaces or non-ASCII letters...)" "Nothing was fetched from HubSpot." Immediate, no retries, token never printed | 1 | run.log line only |
 | SLACK_WEBHOOK_URL is a placeholder or not a Slack webhook URL | "SLACK_WEBHOOK_URL is not a Slack incoming webhook URL (it should start with https://hooks.slack.com/ ...). Paste the webhook URL Slack gave you, or remove the line to skip Slack." "Nothing was fetched from HubSpot." The URL is never printed | 1 | run.log line only |
-| Bad token (401) | "HubSpot rejected the token (401). Check that HUBSPOT_TOKEN holds a current private app access token for this portal." "No snapshot or brief was written." | 2 | run.log line only |
-| Missing scope (403) | "HubSpot refused <path> (403). The private app needs the crm.objects.deals.read and crm.objects.owners.read scopes." "No snapshot or brief was written." | 2 | run.log line only |
+| Bad token (401) | "HubSpot rejected the token (401). Check that HUBSPOT_TOKEN holds a current HubSpot service key or private app token for this portal." "No snapshot or brief was written." | 2 | run.log line only |
+| Missing scope (403) | "HubSpot refused <path> (403). The HubSpot service key or private app needs the crm.objects.deals.read and crm.objects.owners.read scopes." "No snapshot or brief was written." | 2 | run.log line only |
 | Rate limited (429) | Silent retry honouring Retry-After (over 60 s: stop at once, exit 2), else 1s, 2s, 4s, 8s, 16s. If still limited: "HubSpot kept rate limiting <path> (429) after 5 retries. Try again in a few minutes." | 0 or 2 | on a successful retry: snapshot, brief, run.log line; on failure: run.log line only |
 | HubSpot 5xx or network down | Same retry; then "HubSpot request to <path> failed with status N." or "Could not reach HubSpot..." | 2 | run.log line only |
 | Slack webhook failure | "Slack post failed (status N | could not connect). The brief is saved at <file>. Check SLACK_WEBHOOK_URL." The URL is never echoed | 3 | snapshot, brief, run.log line |
@@ -66,7 +66,7 @@ not necessarily a developer.
 ## Recovery
 
 - Missing, malformed or rejected token: fix `HUBSPOT_TOKEN` (paste the raw token, no quotes inside the value), re-run. Nothing partial was written, so history is not corrupted.
-- 403: add the scope to the private app (HubSpot rotates nothing), re-run.
+- 403: add the scope to the service key or private app (HubSpot rotates nothing), re-run.
 - 429 or 5xx: re-run later; a same-day re-run simply overwrites today's snapshot.
 - Unwritable `--out` or a failed write (exit 4): fix the location or free disk space and re-run; a same-day re-run overwrites today's snapshot.
 - Slack failure: the brief file is already on disk; fix the webhook and re-run (same-day re-run is safe), or paste the file.

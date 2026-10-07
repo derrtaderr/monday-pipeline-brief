@@ -9,6 +9,7 @@ const who = (d) => `${d.name}, ${money(d.amount)}, ${d.owner}`;
 function staleDetail({ deal, reason }, nextStepCheck) {
   if (reason === 'no-next-step') return 'no next step';
   if (deal.last_activity) return `no activity since ${shortDate(deal.last_activity)}`;
+  if (deal.created) return `no activity logged since it was created ${shortDate(deal.created)}`;
   return nextStepCheck ? 'next step set, no activity logged' : 'no activity logged';
 }
 

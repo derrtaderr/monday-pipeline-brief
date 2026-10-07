@@ -60,6 +60,30 @@ test('amounts, dates and next steps are normalised', () => {
   assert.equal(byName.Northwind.next_step, 'Pricing call');
 });
 
+test('created is the createdate day, else the record createdAt day', () => {
+  // The hand-recorded pages carry no createdate property, only the top-level createdAt.
+  assert.equal(byName.Northwind.created, '2026-08-03');
+  const s = buildSnapshot({ ...raw, deals: [
+    { id: '1', properties: { dealname: 'A', createdate: '2026-09-20T15:04:11.218Z' }, createdAt: '2026-01-01T00:00:00.000Z' },
+    { id: '2', properties: { dealname: 'B', createdate: null } },
+  ] });
+  assert.equal(s.deals[0].created, '2026-09-20');
+  assert.equal(s.deals[1].created, null);
+});
+
+test('a real-shaped deals page becomes a correct snapshot', () => {
+  const s = buildSnapshot({ ...raw, deals: fx('deals-real-shape.json').results });
+  const d = Object.fromEntries(s.deals.map((x) => [x.name, x]));
+  assert.deepEqual(d['Larkspur Analytics'], {
+    id: '900000000101', name: 'Larkspur Analytics', owner: 'Dana Ruiz',
+    pipeline_id: 'default', pipeline: 'Sales Pipeline', stage_id: 'qualifiedtobuy', stage: 'Qualified', stage_order: 1,
+    status: 'open', amount: 60000, close_date: '2026-11-13', next_step: '', last_activity: null, created: '2026-10-05',
+  });
+  assert.equal(d['Wrenfield Labs'].last_activity, '2026-10-01');
+  assert.equal(d['Bramblewood Cafe'].owner, 'Unassigned');
+  assert.ok(!JSON.stringify(s).includes('hubspot.com'), 'the record url is not copied into the snapshot');
+});
+
 test('an unknown stage keeps its id, has no order and counts as open', () => {
   assert.equal(byName.Mystery.stage, 'deleted-stage');
   assert.equal(byName.Mystery.stage_order, null);
@@ -68,7 +92,7 @@ test('an unknown stage keeps its id, has no order and counts as open', () => {
 
 test('snapshot deals hold only the documented fields', () => {
   assert.deepEqual(Object.keys(byName.Northwind).sort(), [
-    'amount', 'close_date', 'id', 'last_activity', 'name', 'next_step', 'owner',
+    'amount', 'close_date', 'created', 'id', 'last_activity', 'name', 'next_step', 'owner',
     'pipeline', 'pipeline_id', 'stage', 'stage_id', 'stage_order', 'status',
   ]);
 });

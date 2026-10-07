@@ -12,6 +12,14 @@ function deal(over) {
 }
 const snap = (date, deals) => ({ schema: 1, date, deals });
 
+test('a deal with no logged activity, created 14+ days ago, says so with its creation date', () => {
+  const curr = snap('2026-10-05', [deal({ id: 'c', name: 'Copperfield', owner: 'Leo', amount: 42000, last_activity: null, created: '2026-09-20' })]);
+  for (const nextStep of [true, false]) {
+    const out = renderBrief(compare(null, curr, '2026-10-05', { nextStep }));
+    assert.ok(out.includes('- Copperfield, $42K, Leo: no activity logged since it was created Sep 20\n'), out);
+  }
+});
+
 test('renders every section in order with counts', () => {
   const prev = snap('2026-09-28', [
     deal({ id: 'a', name: 'Quarry', owner: 'Leo', amount: 120000, close_date: '2026-10-19' }),

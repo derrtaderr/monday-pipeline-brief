@@ -1,0 +1,88 @@
+{
+  "results": [
+    {
+      "id": "900000000101",
+      "properties": {
+        "amount": "60000",
+        "amount_in_home_currency": "60000",
+        "closedate": "2026-11-13T00:00:00Z",
+        "createdate": "2026-10-05T06:44:42.243Z",
+        "dealname": "Larkspur Analytics",
+        "dealstage": "qualifiedtobuy",
+        "hs_lastmodifieddate": "2026-10-05T06:45:04.676Z",
+        "hs_next_step": null,
+        "hs_object_id": "900000000101",
+        "hubspot_owner_id": "101",
+        "notes_last_updated": null,
+        "pipeline": "default"
+      },
+      "createdAt": "2026-10-05T06:44:42.243Z",
+      "updatedAt": "2026-10-05T06:45:04.676Z",
+      "archived": false,
+      "url": "https://app-na2.hubspot.com/contacts/12345678/record/0-3/900000000101"
+    },
+    {
+      "id": "900000000102",
+      "properties": {
+        "amount": "42000",
+        "amount_in_home_currency": "42000",
+        "closedate": "2026-12-04T00:00:00Z",
+        "createdate": "2026-09-20T15:04:11.218Z",
+        "dealname": "Copperfield Supply",
+        "dealstage": "presentationscheduled",
+        "hs_lastmodifieddate": "2026-10-02T09:12:40.031Z",
+        "hs_next_step": "Send pricing",
+        "hs_object_id": "900000000102",
+        "hubspot_owner_id": "102",
+        "notes_last_updated": null,
+        "pipeline": "default"
+      },
+      "createdAt": "2026-09-20T15:04:11.218Z",
+      "updatedAt": "2026-10-02T09:12:40.031Z",
+      "archived": false,
+      "url": "https://app-na2.hubspot.com/contacts/12345678/record/0-3/900000000102"
+    },
+    {
+      "id": "900000000103",
+      "properties": {
+        "amount": "18500",
+        "amount_in_home_currency": "18500",
+        "closedate": "2026-10-30T00:00:00Z",
+        "createdate": "2026-08-11T13:20:00.512Z",
+        "dealname": "Wrenfield Labs",
+        "dealstage": "decisionmakerboughtin",
+        "hs_lastmodifieddate": "2026-10-01T18:22:05.330Z",
+        "hs_next_step": "Security review",
+        "hs_object_id": "900000000103",
+        "hubspot_owner_id": "101",
+        "notes_last_updated": "2026-10-01T18:22:05.330Z",
+        "pipeline": "default"
+      },
+      "createdAt": "2026-08-11T13:20:00.512Z",
+      "updatedAt": "2026-10-01T18:22:05.330Z",
+      "archived": false,
+      "url": "https://app-na2.hubspot.com/contacts/12345678/record/0-3/900000000103"
+    },
+    {
+      "id": "900000000104",
+      "properties": {
+        "amount": "1000",
+        "amount_in_home_currency": "1000",
+        "closedate": "2026-10-12T06:32:24.574Z",
+        "createdate": "2026-10-05T06:32:24.574Z",
+        "dealname": "Bramblewood Cafe",
+        "dealstage": "appointmentscheduled",
+        "hs_lastmodifieddate": "2026-10-05T06:33:33.480Z",
+        "hs_next_step": null,
+        "hs_object_id": "900000000104",
+        "hubspot_owner_id": null,
+        "notes_last_updated": null,
+        "pipeline": "default"
+      },
+      "createdAt": "2026-10-05T06:32:24.574Z",
+      "updatedAt": "2026-10-05T06:33:33.480Z",
+      "archived": false,
+      "url": "https://app-na2.hubspot.com/contacts/12345678/record/0-3/900000000104"
+    }
+  ]
+}

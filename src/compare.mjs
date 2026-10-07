@@ -7,9 +7,12 @@ export const STALE_DAYS = 14;
 const byAmount = (get = (x) => x) => (a, b) => get(b).amount - get(a).amount;
 const sum = (deals) => deals.reduce((n, d) => n + d.amount, 0);
 
+// With no logged activity, the deal's age stands in: a deal created under STALE_DAYS ago has
+// not had time to go quiet. With no creation date either, it is flagged as before.
 function staleReason(d, today, nextStep) {
   if (nextStep && !d.next_step) return 'no-next-step';
-  if (!d.last_activity || daysBetween(d.last_activity, today) >= STALE_DAYS) return 'no-activity';
+  const since = d.last_activity || d.created;
+  if (!since || daysBetween(since, today) >= STALE_DAYS) return 'no-activity';
   return null;
 }
 

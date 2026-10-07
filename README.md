@@ -6,7 +6,7 @@ This tool remembers for you. Each week it saves a snapshot of your HubSpot deals
 
 It is free, it runs on your machine with your own HubSpot key, and it has zero dependencies. Nothing is sent anywhere except HubSpot (to read deals) and, if you ask for it, your own Slack webhook.
 
-**v0.1, early.** The HubSpot side is tested against HubSpot's published API specs and against recorded responses, but it is not yet confirmed on many real portals. If you try it, please report problems in GitHub Issues, and tell us when it worked in GitHub Discussions. Both help.
+**v0.1, early.** The HubSpot side is tested against HubSpot's published API specs and against recorded responses. It has now been run on one real HubSpot portal, with a custom pipeline and a service key, on test data: every stage move, slipped close date, close, new deal and next step change came out right. That is one portal, so it is not yet confirmed on many real portals. If you try it, please report problems in GitHub Issues, and tell us when it worked in GitHub Discussions. Both help.
 
 ## What the brief looks like
 
@@ -67,13 +67,17 @@ node bin/monday-brief.mjs demo
 
 ## Five minute quickstart
 
-You need Node 20 or newer and HubSpot admin rights (super admin, or permission to create private apps).
+You need Node 20 or newer and HubSpot admin rights (super admin, or permission to create service keys or private apps).
 
-1. **Create a private app in HubSpot.** Settings, then Integrations, then Private Apps, then Create a private app. (HubSpot has been moving this screen; in some newer accounts it sits under Development, then Legacy apps, as a private app.) Name it "Monday brief". On the Scopes tab tick exactly these two read scopes:
+1. **Create a service key in HubSpot.** Settings, then Development, then Legacy Apps (or search the settings for "service key"), then **Create a service key**. Name it "Monday brief" and add exactly these two read scopes:
    - `crm.objects.deals.read`
    - `crm.objects.owners.read`
 
-   Create the app and copy its access token (it starts with `pat-`).
+   Create the key. On its page, the "Service Key" box has Show and Copy buttons; copy the key (it starts with `pat-`, for example `pat-na1-` or `pat-na2-` depending on your region). That is your `HUBSPOT_TOKEN`.
+
+   **Older accounts that still offer private apps** can use one instead: Settings, then Integrations, then Private Apps, then **Create a private app**. On the Scopes tab tick the same two read scopes, create the app and copy its access token (it also starts with `pat-`).
+
+   To revoke access later, open the key under Service Keys and press Delete (for a private app, delete the app).
 2. **Put the token in your environment.** Never paste it into a file you commit.
    ```bash
    export HUBSPOT_TOKEN="paste your pat- token here"
@@ -227,11 +231,13 @@ All deals in all deal pipelines are read. "Open" means the deal's stage is not a
 - **Moved back a stage / Moved forward.** Open deals whose stage position changed, using the stage order you set in HubSpot's pipeline settings. A deal moved to a different pipeline is not counted as a stage move.
 - **No next step, or no activity in 14+ days.** HubSpot has a free-text "Next step" field (`hs_next_step`) but no next step due date, so the brief checks two things on open deals:
   - `hs_next_step` is empty, or
-  - `hs_next_step` is filled in, but `notes_last_updated` (HubSpot's "Last Activity Date", the last logged call, email, meeting or note) is empty or 14 or more days old.
+  - `hs_next_step` is filled in, but `notes_last_updated` (HubSpot's "Last Activity Date", the last logged call, email, meeting or note) is 14 or more days old. If no activity has ever been logged, the deal's creation date (`createdate`) stands in: a deal created less than 14 days ago is not flagged, and an older one reads "no activity logged since it was created Sep 20".
+
+  An empty Next step is flagged on any open deal, even one created today, because the next step is the one field that says what happens next and filling it takes seconds.
 
   It does not use "Last modified date", because workflows and integrations update that on deals nobody has touched.
 
-  **If your team does not use the Next step field**, every open deal would land here. Run with `--no-next-step` (or put `export MONDAY_BRIEF_NEXT_STEP=off` in your env file) and the section becomes "No activity in 14+ days", checking only `notes_last_updated`.
+  **If your team does not use the Next step field**, every open deal would land here. Run with `--no-next-step` (or put `export MONDAY_BRIEF_NEXT_STEP=off` in your env file) and the section becomes "No activity in 14+ days", checking only `notes_last_updated` (and `createdate` when nothing is logged).
 - **New this week.** Deals that were not in the previous snapshot.
 - **Closed.** The won and lost deals from the headline.
 
@@ -239,7 +245,7 @@ Lists are sorted by amount, largest first. Each section shows its 10 largest dea
 
 ## Where your data goes
 
-- Snapshots are plain JSON on your disk, one file per week, kept private: folders and files the tool creates get permissions 0700 (folders) and 0600 (snapshots, briefs, `run.log`), and existing ones keep their permissions, so if you point `--dir` at a folder you already have, check who can read it. Each snapshot holds only these fields per deal: id, name, owner name, pipeline, stage, stage order, open/won/lost, amount, close date, next step text and last activity date.
+- Snapshots are plain JSON on your disk, one file per week, kept private: folders and files the tool creates get permissions 0700 (folders) and 0600 (snapshots, briefs, `run.log`), and existing ones keep their permissions, so if you point `--dir` at a folder you already have, check who can read it. Each snapshot holds only these fields per deal: id, name, owner name, pipeline, stage, stage order, open/won/lost, amount, close date, next step text, last activity date and creation date.
 - The token is sent only to `api.hubapi.com` in the Authorization header. It is never written to a snapshot, the brief, a log or an error message, and a test checks that across every success and failure path.
 - No telemetry. The tool never phones home.
 

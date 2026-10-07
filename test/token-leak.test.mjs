@@ -8,7 +8,7 @@ import { writeSnapshot } from '../src/store.mjs';
 import { capture } from './helpers/io.mjs';
 import { fakeFetch, happyRoutes, respond } from './helpers/fake-hubspot.mjs';
 
-// Shaped like a real HubSpot private app token.
+// Shaped like a real HubSpot service key or private app token.
 const TOKEN = ['pat', 'na1', '8c1f2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f'].join('-');
 const HOOK = 'https://hooks.slack.com/services/T000/B000/XXXXSECRETXXXX';
 const NOW = new Date(2026, 9, 5, 7, 0, 0);

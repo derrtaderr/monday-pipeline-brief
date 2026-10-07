@@ -16,7 +16,7 @@ test('readme states exactly what the stale next step check reads', () => {
   assert.match(README, /notes_last_updated/);
 });
 
-test('readme lists the two private app scopes', () => {
+test('readme lists the two read scopes', () => {
   assert.match(README, /crm\.objects\.deals\.read/);
   assert.match(README, /crm\.objects\.owners\.read/);
 });
@@ -239,4 +239,38 @@ test('flow.md names a missing or misnamed env file as a cause of a scheduled run
 test('limitations say an open custom stage at 0% with no isClosed would be counted as lost', () => {
   const lim = README.slice(README.indexOf('## Limitations'), README.indexOf('## Did it help?'));
   assert.match(lim, /open custom stage set to 0% probability[^\n]*`isClosed`[^\n]*counted as lost/);
+});
+
+const QUICKSTART = README.slice(README.indexOf('## Five minute quickstart'), README.indexOf('### Options'));
+
+test('the quickstart leads with a HubSpot service key and keeps a short private app path for older accounts', () => {
+  const serviceKey = QUICKSTART.indexOf('Create a service key');
+  const privateApp = QUICKSTART.indexOf('Create a private app');
+  assert.ok(serviceKey > -1, 'quickstart names the "Create a service key" button');
+  assert.ok(privateApp > serviceKey, 'the private app path comes after the service key path');
+  assert.match(QUICKSTART, /Settings, then Development, then Legacy Apps/);
+  assert.match(QUICKSTART, /older accounts/i);
+  assert.doesNotMatch(README, /project-based/i, 'never send users to a project-based app');
+});
+
+test('the quickstart asks for exactly the two read scopes, no write scope', () => {
+  assert.match(QUICKSTART, /`crm\.objects\.deals\.read`/);
+  assert.match(QUICKSTART, /`crm\.objects\.owners\.read`/);
+  assert.doesNotMatch(README, /crm\.objects\.deals\.write/);
+});
+
+test('the readme says how to revoke a service key', () => {
+  assert.match(README, /Service Keys[^\n]*Delete/);
+});
+
+test('the readme says, honestly, that it has run on one real HubSpot portal', () => {
+  assert.match(README, /one real HubSpot portal/);
+  assert.match(README, /custom pipeline/);
+  assert.match(README, /service key/);
+  assert.match(README, /test data/);
+});
+
+test('the readme stale definition covers deals with no logged activity by their creation date', () => {
+  assert.match(README, /createdate/);
+  assert.match(README, /created less than 14 days ago/);
 });
