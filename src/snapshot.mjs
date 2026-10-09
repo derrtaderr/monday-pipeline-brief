@@ -49,13 +49,25 @@ export function buildSnapshot({ deals, pipelines, owners, takenAt, date, source 
     }
   }
   const ownerNames = new Map(owners.map((o) => [String(o.id), ownerName(o)]));
+  // Paging can return a deal twice when deals change mid-listing. Keep the first copy.
+  const seen = new Set();
+  const unique = deals.filter((d) => !seen.has(String(d.id)) && seen.add(String(d.id)));
 
   return {
     schema: SCHEMA,
     taken_at: takenAt.toISOString(),
     date,
     source,
-    deals: deals.map((d) => {
+    // The full stage layout at snapshot time, so a later brief can judge stage moves in the
+    // pipeline order that was current, even for stages no deal sits in.
+    pipelines: pipelines.map((p) => ({
+      id: p.id,
+      label: p.label,
+      stages: [...(p.stages ?? [])]
+        .sort((a, b) => a.displayOrder - b.displayOrder)
+        .map((s) => ({ id: s.id, label: s.label, order: s.displayOrder, status: stageStatus(s.metadata) })),
+    })),
+    deals: unique.map((d) => {
       const p = d.properties ?? {};
       const stage = stages.get(`${p.pipeline}/${p.dealstage}`);
       const ownerId = p.hubspot_owner_id ? String(p.hubspot_owner_id) : null;
@@ -75,6 +87,8 @@ export function buildSnapshot({ deals, pipelines, owners, takenAt, date, source 
         last_activity: isoDay(p.notes_last_updated),
         // The createdate property, else the record's createdAt (required by HubSpot's spec).
         created: isoDay(p.createdate ?? d.createdAt),
+        // HubSpot's link to the deal record, for the brief. Only an https link is kept.
+        url: typeof d.url === 'string' && d.url.startsWith('https://') ? d.url : null,
       };
     }),
   };

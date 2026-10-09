@@ -4,7 +4,7 @@
   "name": "Northwind",
   "owner": "Dana",
   "stage": "Qualified",
-  "amount": 75000,
+  "amount": 90000,
   "close_date": "2026-12-02",
   "next_step": "Pricing call",
   "next_step_date": "2026-10-14",
@@ -69,12 +69,13 @@
   "id": "D106",
   "name": "Tessellate",
   "owner": "Marcus",
-  "stage": "Discovery",
+  "stage": "Upcoming",
   "amount": 40000,
   "close_date": "2026-11-04",
   "next_step": "Champion intro",
   "next_step_date": "2026-10-07",
-  "status": "open"
+  "status": "open",
+  "pipeline": "Renewals"
  },
  {
   "id": "D107",
@@ -92,7 +93,7 @@
   "name": "Lumen Health",
   "owner": "Dana",
   "stage": "Proposal",
-  "amount": 90000,
+  "amount": 96000,
   "close_date": "2026-11-10",
   "next_step": "Security review",
   "next_step_date": "2026-10-08",
@@ -176,17 +177,6 @@
   "status": "open"
  },
  {
-  "id": "D116",
-  "name": "Juniper Bio",
-  "owner": "Leo",
-  "stage": "Discovery",
-  "amount": 40000,
-  "close_date": "2026-11-05",
-  "next_step": "Security review",
-  "next_step_date": "2026-10-12",
-  "status": "open"
- },
- {
   "id": "D117",
   "name": "Ironclad Ops",
   "owner": "Leo",
@@ -202,7 +192,7 @@
   "name": "Westfield",
   "owner": "Dana",
   "stage": "Qualified",
-  "amount": 75000,
+  "amount": 60000,
   "close_date": "2026-12-09",
   "next_step": "Send proposal",
   "next_step_date": "2026-10-11",
@@ -214,7 +204,7 @@
   "owner": "Leo",
   "stage": "Qualified",
   "amount": 32000,
-  "close_date": "2026-10-06",
+  "close_date": "2026-09-30",
   "next_step": "Security review",
   "next_step_date": "2026-10-09",
   "status": "open"
@@ -262,5 +252,52 @@
   "next_step": "Send proposal",
   "next_step_date": "2026-10-16",
   "status": "open"
+ },
+ {
+  "id": "D124",
+  "name": "Marlowe Systems",
+  "owner": "Marcus",
+  "stage": "Demo",
+  "amount": 30000,
+  "close_date": "2026-11-30",
+  "next_step": "Pricing call",
+  "next_step_date": "2026-10-09",
+  "status": "open"
+ },
+ {
+  "id": "D125",
+  "name": "Pemberton Labs",
+  "owner": "Priya",
+  "pipeline": "Renewals",
+  "stage": "Upcoming",
+  "amount": 36000,
+  "close_date": "2026-12-15",
+  "next_step": "Renewal call",
+  "next_step_date": "2026-10-12",
+  "status": "open"
+ },
+ {
+  "id": "D126",
+  "name": "Wrenfield Clinics",
+  "owner": "Priya",
+  "pipeline": "Renewals",
+  "stage": "Negotiating",
+  "amount": 12000,
+  "close_date": "2026-12-18",
+  "next_step": "Send terms",
+  "next_step_date": "2026-10-13",
+  "status": "open"
+ },
+ {
+  "id": "D127",
+  "name": "Harbor Freightworks",
+  "owner": "Leo",
+  "pipeline": "Renewals",
+  "stage": "Negotiating",
+  "amount": 15000,
+  "close_date": "2026-10-30",
+  "next_step": "Kickoff",
+  "next_step_date": "2026-10-09",
+  "status": "won"
  }
 ]

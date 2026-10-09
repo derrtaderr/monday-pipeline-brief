@@ -4,11 +4,23 @@ import { readFileSync } from 'node:fs';
 import { demoBrief } from '../src/cli.mjs';
 
 const README = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+// Scheduling stored mode with cron or launchd is an appendix at the end of the README.
+const SCHEDULE = '## Appendix: schedule stored mode with cron or launchd';
+const scheduleSection = () => {
+  assert.ok(README.includes(SCHEDULE), 'README needs the stored-mode scheduling appendix');
+  return README.slice(README.indexOf(SCHEDULE));
+};
 
 test('readme matches demo output', () => {
   const m = /<!-- demo-output:start -->\n```markdown\n([\s\S]*?)```\n<!-- demo-output:end -->/.exec(README);
   assert.ok(m, 'README needs a ```markdown block between the demo-output markers');
   assert.equal(m[1], demoBrief(), 'README example is stale: paste the output of `node bin/monday-brief.mjs demo`');
+});
+
+test('readme grouped example matches demo --group-by owner output', () => {
+  const m = /<!-- demo-grouped-output:start -->\n```markdown\n([\s\S]*?)```\n<!-- demo-grouped-output:end -->/.exec(README);
+  assert.ok(m, 'README needs a ```markdown block between the demo-grouped-output markers');
+  assert.equal(m[1], demoBrief({ groupBy: 'owner' }), 'README grouped example is stale: paste the output of `node bin/monday-brief.mjs demo --group-by owner`');
 });
 
 test('readme states exactly what the stale next step check reads', () => {
@@ -24,7 +36,8 @@ test('readme lists the two read scopes', () => {
 test('readme only shows commands that exist for clone and npx users', () => {
   assert.doesNotMatch(README, /`monday-brief /, 'there is no global monday-brief command for clone users');
   assert.match(README, /node bin\/monday-brief\.mjs demo/);
-  assert.match(README, /npx github:derrtaderr\/monday-pipeline-brief run/);
+  assert.match(README, /npx github:derrtaderr\/monday-pipeline-brief#v\d+\.\d+\.\d+ run/, 'npx commands pin a release tag');
+  assert.doesNotMatch(README, /npx (--yes )?github:derrtaderr\/monday-pipeline-brief (run|demo)/, 'no unpinned npx command');
 });
 
 function block(lang) {
@@ -35,7 +48,7 @@ function block(lang) {
 
 test('scheduled runs use the same snapshot folder as the manual quickstart run', () => {
   const quickstart = README.slice(README.indexOf('## Five minute quickstart'), README.indexOf('### Options'));
-  const schedule = README.slice(README.indexOf('### Schedule it weekly'), README.indexOf('## Exactly what each section checks'));
+  const schedule = scheduleSection();
   assert.match(quickstart, /~\/\.monday-pipeline-brief/);
   assert.match(schedule, /~\/\.monday-pipeline-brief\/run\.log/);
   for (const text of [quickstart, schedule]) {
@@ -82,7 +95,7 @@ test('the launchd recipe never sends the brief to a world-readable /tmp log', ()
 });
 
 test('readme warns macOS users that scheduled jobs cannot read Documents, Desktop or Downloads (TCC)', () => {
-  const schedule = README.slice(README.indexOf('### Schedule it weekly'), README.indexOf('## Exactly what each section checks'));
+  const schedule = scheduleSection();
   assert.match(schedule, /~\/Documents/);
   assert.match(schedule, /~\/Desktop/);
   assert.match(schedule, /~\/Downloads/);
@@ -92,7 +105,7 @@ test('readme warns macOS users that scheduled jobs cannot read Documents, Deskto
 });
 
 test('readme explains scheduled versus ad-hoc runs and a Mac asleep at the scheduled time', () => {
-  const schedule = README.slice(README.indexOf('### Schedule it weekly'), README.indexOf('## Exactly what each section checks'));
+  const schedule = scheduleSection();
   assert.match(schedule, /by hand mid-week/);
   assert.match(schedule, /at least 6 days old/);
   assert.match(schedule, /asleep/);
@@ -112,7 +125,7 @@ test('readme permissions line applies to what the tool creates; existing folders
 });
 
 test('the macOS privacy note also covers --dir and --out inside protected folders', () => {
-  const schedule = README.slice(README.indexOf('### Schedule it weekly'), README.indexOf('## Exactly what each section checks'));
+  const schedule = scheduleSection();
   assert.match(schedule, /--dir.*--out.*(Documents|protected)|--out.*--dir.*(Documents|protected)/);
 });
 
@@ -128,7 +141,6 @@ test('every HUBSPOT_TOKEN placeholder in the readme is one the token check rejec
   for (const v of values) assert.equal(validToken(v), false, `placeholder ${v} passes the token check`);
 });
 
-const scheduleSection = () => README.slice(README.indexOf('### Schedule it weekly'), README.indexOf('## Exactly what each section checks'));
 
 test('the launchd recipe shows how to test it now and how to reinstall after editing', () => {
   const s = scheduleSection();
@@ -167,9 +179,10 @@ test('troubleshooting names a missing or misnamed env file as a top cause of no 
   assert.match(para.slice(0, 600), /~\/\.monday-brief\.env/);
 });
 
-test('the readme marks the release v0.1, early, says what it was tested against, and asks for reports', () => {
+test('the readme marks the release v0.3, early, says what it was tested against, and asks for reports', () => {
   const top = README.slice(0, README.indexOf('## What the brief looks like'));
-  assert.match(top, /v0\.1, early/);
+  assert.match(top, /v0\.3, early/);
+  assert.match(top, /stateless mode[^\n]*test portal/i);
   assert.match(top, /HubSpot's published API specs/);
   assert.match(top, /not yet confirmed on many real portals/);
   assert.match(top, /GitHub Issues/);
@@ -253,9 +266,11 @@ test('the quickstart leads with a HubSpot service key and keeps a short private 
   assert.doesNotMatch(README, /project-based/i, 'never send users to a project-based app');
 });
 
-test('the quickstart asks for exactly the two read scopes, no write scope', () => {
+test('the quickstart asks for exactly three read scopes, no write scope', () => {
   assert.match(QUICKSTART, /`crm\.objects\.deals\.read`/);
   assert.match(QUICKSTART, /`crm\.objects\.owners\.read`/);
+  assert.match(QUICKSTART, /`settings\.currencies\.read`/);
+  assert.match(QUICKSTART, /exactly these three read scopes/);
   assert.doesNotMatch(README, /crm\.objects\.deals\.write/);
 });
 
@@ -273,4 +288,116 @@ test('the readme says, honestly, that it has run on one real HubSpot portal', ()
 test('the readme stale definition covers deals with no logged activity by their creation date', () => {
   assert.match(README, /createdate/);
   assert.match(README, /created less than 14 days ago/);
+});
+
+test('the opener promises the outcome and claims nothing about what HubSpot cannot do', () => {
+  const top = README.slice(0, README.indexOf('## What the brief looks like'));
+  assert.match(top.split('\n')[2], /^Know what changed in your HubSpot pipeline before Monday's meeting\./);
+  assert.doesNotMatch(top, /HubSpot stores|only current state|right now, not what changed|can't produce|cannot produce/i);
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.doesNotMatch(pkg.description, /can't produce|cannot produce/i);
+});
+
+test('help text, the options table and the section docs describe the same large-deal default', async () => {
+  const { usage } = await import('../src/cli.mjs');
+  const PHRASE = 'the largest open deals, at most 10% of them (at least one, unless every deal above $0 has the same amount and they outnumber that limit)';
+  assert.ok(usage().replace(/\s+/g, ' ').includes(PHRASE), 'help text');
+  const table = README.slice(README.indexOf('### Options'), README.indexOf('### Run it every week'));
+  assert.ok(table.split('\n').find((l) => l.startsWith('| Large deal')).includes(PHRASE), 'options table');
+  assert.match(README, /tied on the same amount[^\n]*left out[^\n]*lowest HubSpot record id/);
+  assert.match(README, /every open deal with an amount is the same size, no deal is large/);
+  const flow = readFileSync(new URL('../.vibecodepm/flow.md', import.meta.url), 'utf8');
+  assert.ok(flow.replace(/\s+/g, ' ').includes(PHRASE), 'flow.md 6a');
+  const log = readFileSync(new URL('../CHANGELOG.md', import.meta.url), 'utf8');
+  assert.doesNotMatch(log, /When every open deal with an amount is the same size, no deal is a large deal\./, 'changelog short form is broader than the rule');
+  assert.doesNotMatch(README + usage(), /top 10% of (your )?open deals/);
+});
+
+test('the readme and flow.md list every section a first-run brief prints', () => {
+  const quick = README.slice(README.indexOf('## Five minute quickstart'), README.indexOf('### Options'));
+  assert.match(quick, /first brief[^\n]*open pipeline total[^\n]*Close date passed[^\n]*stale next step list/);
+  const flow = readFileSync(new URL('../.vibecodepm/flow.md', import.meta.url), 'utf8');
+  assert.match(flow.split('\n').find((l) => l.startsWith('4. **First run state')), /"Close date passed"/);
+  assert.match(flow.split('\n').find((l) => l.startsWith('| First run, one snapshot |')), /close date passed/);
+});
+
+test('the readme demo section says the demo links point at a made-up portal', () => {
+  const demo = README.slice(README.indexOf('## What the brief looks like'), README.indexOf('<!-- demo-output:start -->'));
+  assert.match(demo, /links point at a made-up HubSpot portal/);
+});
+
+test('limitations say Slack formatting characters in HubSpot names still format in Slack', () => {
+  const lim = README.slice(README.indexOf('## Limitations'), README.indexOf('## Did it help?'));
+  assert.match(lim, /Slack[^\n]*\*bold\*[^\n]*links, mentions and HTML in names are always neutralised/);
+});
+
+test('the readme and changelog say a live run lists Changed stage when the old stage was deleted', () => {
+  const line = README.split('\n').find((l) => l.startsWith('- **Moved back a stage / Moved forward / Changed stage.**'));
+  assert.match(line, /On a live run[^\n]*Changed stage[^\n]*deleted/);
+  assert.doesNotMatch(line, /written by v0\.1 and has no stored stage order/);
+  const log = readFileSync(new URL('../CHANGELOG.md', import.meta.url), 'utf8');
+  assert.doesNotMatch(log, /A baseline from 0\.1 whose stage orders give no direction/);
+});
+
+test('the exit code table names every usage error: bad --group-by, bad --large-deal, demo --dir', () => {
+  const table = README.slice(README.indexOf('## Exit codes'), README.indexOf('## Limitations'));
+  const one = table.split('\n').find((l) => l.startsWith('| 1 |'));
+  assert.match(one, /--group-by/);
+  assert.match(one, /--large-deal/);
+  assert.match(one, /demo --dir/);
+});
+
+test('the quickstart leads with the stateless path: run it once against your portal', () => {
+  const stateless = QUICKSTART.search(/npx github:derrtaderr\/monday-pipeline-brief#v\d+\.\d+\.\d+ run --since 7d/);
+  assert.ok(stateless > 0, 'the quickstart runs --since 7d');
+  assert.match(QUICKSTART, /run it once against your portal/i);
+  const stored = QUICKSTART.search(/npx github:derrtaderr\/monday-pipeline-brief(#v[\d.]+)? run\n/);
+  assert.ok(stored === -1 || stored > stateless, 'stored mode comes after the stateless path');
+});
+
+test('the GitHub Action example in the readme is the workflow file under examples/, keeps no state, and never prints the brief to the log', () => {
+  const file = readFileSync(new URL('../examples/github-action.yml', import.meta.url), 'utf8');
+  const m = /```yaml\n([\s\S]*?)```/.exec(README);
+  assert.ok(m, 'README needs a yaml block');
+  assert.equal(m[1], file, 'README example is stale: paste examples/github-action.yml');
+  assert.match(file, /run --since 7d > \/dev\/null/);
+  const guard = file.indexOf('test -n "$SLACK_WEBHOOK_URL"');
+  assert.ok(guard > 0 && guard < file.indexOf('npx'), 'the job fails fast when the Slack secret is missing, before it reads HubSpot');
+  assert.match(file, /secrets\.HUBSPOT_TOKEN/);
+  assert.doesNotMatch(file, /actions\/cache|upload-artifact/, 'stateless: nothing is kept between runs');
+  assert.match(README, /examples\/github-action\.yml/);
+  assert.match(README, /\.github\/workflows\//);
+});
+
+test('the exit code table names exit 5, stateless mode refused, and the stateless usage errors', () => {
+  const table = README.slice(README.indexOf('## Exit codes'), README.indexOf('## Limitations'));
+  assert.match(table, /\| 5 \| [^\n]*more than one currency[^\n]*settings\.currencies\.read/);
+  const one = table.split('\n').find((l) => l.startsWith('| 1 |'));
+  assert.match(one, /--since/);
+  assert.match(one, /--as-of/);
+});
+
+test('limitations no longer claim the tool cannot rebuild earlier weeks, and name what stateless mode loses', () => {
+  const lim = README.slice(README.indexOf('## Limitations'), README.indexOf('## Did it help?'));
+  assert.doesNotMatch(lim, /It cannot reconstruct earlier weeks\./);
+  const s = README.slice(README.indexOf('## Stateless mode'), README.indexOf('## Exactly what each section checks'));
+  for (const re of [/merge/i, /20 /, /restored/i, /permanently deleted|hard delete/i, /more than one currency/, /archived[^\n]*moments|seconds/i]) assert.match(s, re);
+});
+
+test('the options table lists --since, --as-of and MONDAY_BRIEF_SINCE', () => {
+  const table = README.slice(README.indexOf('### Options'), README.indexOf('### Run it every week'));
+  assert.match(table, /--since 7d/);
+  assert.match(table, /--as-of/);
+  assert.match(table, /MONDAY_BRIEF_SINCE/);
+});
+
+test('Did it help? and metrics.md count a stateless first run with changes as activation', () => {
+  const ask = README.slice(README.indexOf('## Did it help?'), README.indexOf('## Development'));
+  assert.match(ask, /--since 7d/);
+  assert.match(ask, /first run/i);
+  const metrics = readFileSync(new URL('../.vibecodepm/metrics.md', import.meta.url), 'utf8');
+  const v03 = metrics.slice(metrics.indexOf('## v0.3'));
+  assert.ok(metrics.includes('## v0.3'), 'metrics.md has a v0.3 section');
+  assert.match(v03, /first `run --since 7d`/);
+  assert.match(v03, /activation/i);
 });

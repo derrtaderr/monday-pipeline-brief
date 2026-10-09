@@ -190,3 +190,40 @@ test('stage metadata is a string map in the spec, and the recorded probability v
     }
   }
 });
+
+// Stateless mode's deal and pipeline requests. The currency endpoint has no spec in this
+// collection's pinned files, so it is covered by its live check (spike/FINDINGS.md) only.
+import { statelessRoutes } from '../helpers/fake-hubspot.mjs';
+
+test('the stateless read path sends paths, methods, query parameters and a batch body the spec defines', { skip }, async () => {
+  const fetch = fakeFetch(statelessRoutes());
+  const c = createHubSpotClient({ token: ['pat', 'na1', '00000000-0000-0000-0000-000000000000'].join('-'), fetch, sleep: async () => {} });
+  await c.listDealsWithHistory();
+  await c.listArchivedDeals();
+  await c.readArchivedWithHistory(['7004']);
+  await c.pipelineAudit('default');
+  const deals = loadSpec('deals');
+  const pipelines = loadSpec('pipelines');
+  const ops = {
+    '/crm/v3/objects/deals': [deals, '/crm/v3/objects/0-3'],
+    '/crm/v3/objects/deals/batch/read': [deals, '/crm/v3/objects/0-3/batch/read'],
+    '/crm/v3/pipelines/deals/default/audit': [pipelines, '/crm/v3/pipelines/{objectType}/{pipelineId}/audit'],
+  };
+  for (const call of fetch.calls) {
+    const url = new URL(call.url);
+    const [spec, template] = ops[url.pathname] ?? [];
+    assert.ok(spec, `${url.pathname} is not an endpoint this test knows`);
+    const operation = spec.paths[template]?.[call.method.toLowerCase()];
+    assert.ok(operation, `${call.method} ${template} is in the spec`);
+    for (const [name, value] of url.searchParams) {
+      const param = operation.parameters.find((p) => p.in === 'query' && p.name === name);
+      assert.ok(param, `${call.method} ${template} has no query parameter "${name}"`);
+      assert.ok(conforms(param.schema, value), `${name}=${value} does not fit the spec type ${param.schema.type}`);
+    }
+    if (call.body) {
+      const schema = operation.requestBody.content['application/json'].schema;
+      assert.deepEqual(validate(schema, call.body, spec), [], `${template} request body`);
+    }
+  }
+  assert.equal(fetch.calls.length, 5, "two history pages, the archived list, one batch read, one audit");
+});

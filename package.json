@@ -1,7 +1,7 @@
 {
   "name": "monday-pipeline-brief",
-  "version": "0.1.1",
-  "description": "The weekly what-changed HubSpot pipeline brief your CRM cannot produce. Runs on your side, zero dependencies.",
+  "version": "0.3.0",
+  "description": "Know what changed in your HubSpot pipeline before Monday's meeting. A weekly brief that runs on your side, zero dependencies.",
   "type": "module",
   "bin": {
     "monday-brief": "bin/monday-brief.mjs"

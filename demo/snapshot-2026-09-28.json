@@ -3,6 +3,98 @@
   "taken_at": "2026-09-28T07:00:00.000Z",
   "date": "2026-09-28",
   "source": "demo",
+  "pipelines": [
+    {
+      "id": "default",
+      "label": "Sales Pipeline",
+      "stages": [
+        {
+          "id": "discovery",
+          "label": "Discovery",
+          "order": 0,
+          "status": "open"
+        },
+        {
+          "id": "qualified",
+          "label": "Qualified",
+          "order": 1,
+          "status": "open"
+        },
+        {
+          "id": "demo",
+          "label": "Demo",
+          "order": 2,
+          "status": "open"
+        },
+        {
+          "id": "proposal",
+          "label": "Proposal",
+          "order": 3,
+          "status": "open"
+        },
+        {
+          "id": "negotiation",
+          "label": "Negotiation",
+          "order": 4,
+          "status": "open"
+        },
+        {
+          "id": "closedwon",
+          "label": "Closed won",
+          "order": 5,
+          "status": "won"
+        },
+        {
+          "id": "closedlost",
+          "label": "Closed lost",
+          "order": 6,
+          "status": "lost"
+        }
+      ]
+    },
+    {
+      "id": "renewals",
+      "label": "Renewals",
+      "stages": [
+        {
+          "id": "upcoming",
+          "label": "Upcoming",
+          "order": 0,
+          "status": "open"
+        },
+        {
+          "id": "contacted",
+          "label": "Contacted",
+          "order": 1,
+          "status": "open"
+        },
+        {
+          "id": "paused",
+          "label": "Paused",
+          "order": 2,
+          "status": "open"
+        },
+        {
+          "id": "negotiating",
+          "label": "Negotiating",
+          "order": 3,
+          "status": "open"
+        },
+        {
+          "id": "closedwon",
+          "label": "Closed won",
+          "order": 4,
+          "status": "won"
+        },
+        {
+          "id": "closedlost",
+          "label": "Closed lost",
+          "order": 5,
+          "status": "lost"
+        }
+      ]
+    }
+  ],
   "deals": [
     {
       "id": "D100",
@@ -17,7 +109,8 @@
       "amount": 75000,
       "close_date": "2026-12-02",
       "next_step": "Pricing call",
-      "last_activity": "2026-09-26"
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D100"
     },
     {
       "id": "D101",
@@ -32,7 +125,8 @@
       "amount": 18000,
       "close_date": "2026-12-07",
       "next_step": "Pricing call",
-      "last_activity": "2026-09-26"
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D101"
     },
     {
       "id": "D102",
@@ -47,7 +141,8 @@
       "amount": 24000,
       "close_date": "2026-10-03",
       "next_step": "Champion intro",
-      "last_activity": "2026-09-26"
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D102"
     },
     {
       "id": "D103",
@@ -62,7 +157,8 @@
       "amount": 24000,
       "close_date": "2026-10-21",
       "next_step": "Champion intro",
-      "last_activity": "2026-09-26"
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D103"
     },
     {
       "id": "D104",
@@ -77,7 +173,8 @@
       "amount": 40000,
       "close_date": "2026-10-18",
       "next_step": "Security review",
-      "last_activity": "2026-09-26"
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D104"
     },
     {
       "id": "D105",
@@ -92,7 +189,8 @@
       "amount": 120000,
       "close_date": "2026-10-19",
       "next_step": "Demo w/ CFO",
-      "last_activity": "2026-09-26"
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D105"
     },
     {
       "id": "D106",
@@ -107,7 +205,8 @@
       "amount": 40000,
       "close_date": "2026-11-04",
       "next_step": "Champion intro",
-      "last_activity": "2026-09-26"
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D106"
     },
     {
       "id": "D107",
@@ -122,7 +221,8 @@
       "amount": 40000,
       "close_date": "2026-11-22",
       "next_step": "Champion intro",
-      "last_activity": "2026-09-26"
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D107"
     },
     {
       "id": "D108",
@@ -137,7 +237,8 @@
       "amount": 90000,
       "close_date": "2026-11-10",
       "next_step": "Security review",
-      "last_activity": "2026-09-26"
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D108"
     },
     {
       "id": "D109",
@@ -152,7 +253,8 @@
       "amount": 48000,
       "close_date": "2026-12-16",
       "next_step": "Demo w/ CFO",
-      "last_activity": "2026-09-26"
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D109"
     },
     {
       "id": "D110",
@@ -167,7 +269,8 @@
       "amount": 24000,
       "close_date": "2026-10-17",
       "next_step": "Send proposal",
-      "last_activity": "2026-09-26"
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D110"
     },
     {
       "id": "D111",
@@ -182,7 +285,8 @@
       "amount": 90000,
       "close_date": "2026-11-02",
       "next_step": "Pricing call",
-      "last_activity": "2026-09-26"
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D111"
     },
     {
       "id": "D112",
@@ -197,7 +301,8 @@
       "amount": 60000,
       "close_date": "2026-12-16",
       "next_step": "Champion intro",
-      "last_activity": "2026-09-26"
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D112"
     },
     {
       "id": "D113",
@@ -212,7 +317,8 @@
       "amount": 48000,
       "close_date": "2026-11-23",
       "next_step": "Pricing call",
-      "last_activity": "2026-09-26"
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D113"
     },
     {
       "id": "D114",
@@ -227,7 +333,8 @@
       "amount": 90000,
       "close_date": "2026-11-23",
       "next_step": "Send proposal",
-      "last_activity": "2026-09-26"
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D114"
     },
     {
       "id": "D115",
@@ -242,7 +349,8 @@
       "amount": 90000,
       "close_date": "2026-11-06",
       "next_step": "Champion intro",
-      "last_activity": "2026-09-26"
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D115"
     },
     {
       "id": "D116",
@@ -257,7 +365,8 @@
       "amount": 40000,
       "close_date": "2026-11-05",
       "next_step": "Security review",
-      "last_activity": "2026-09-26"
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D116"
     },
     {
       "id": "D117",
@@ -272,7 +381,8 @@
       "amount": 24000,
       "close_date": "2026-10-15",
       "next_step": "Send proposal",
-      "last_activity": "2026-09-26"
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D117"
     },
     {
       "id": "D118",
@@ -287,7 +397,8 @@
       "amount": 75000,
       "close_date": "2026-12-09",
       "next_step": "Send proposal",
-      "last_activity": "2026-09-26"
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D118"
     },
     {
       "id": "D119",
@@ -300,9 +411,74 @@
       "stage_order": 1,
       "status": "open",
       "amount": 32000,
-      "close_date": "2026-10-06",
+      "close_date": "2026-09-30",
       "next_step": "Security review",
-      "last_activity": "2026-09-26"
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D119"
+    },
+    {
+      "id": "D124",
+      "name": "Marlowe Systems",
+      "owner": "Marcus",
+      "pipeline_id": "default",
+      "pipeline": "Sales Pipeline",
+      "stage_id": "closedlost",
+      "stage": "Closed lost",
+      "stage_order": 6,
+      "status": "lost",
+      "amount": 30000,
+      "close_date": "2026-09-25",
+      "next_step": "",
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D124"
+    },
+    {
+      "id": "D125",
+      "name": "Pemberton Labs",
+      "owner": "Priya",
+      "pipeline_id": "renewals",
+      "pipeline": "Renewals",
+      "stage_id": "upcoming",
+      "stage": "Upcoming",
+      "stage_order": 0,
+      "status": "open",
+      "amount": 36000,
+      "close_date": "2026-12-15",
+      "next_step": "Renewal call",
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D125"
+    },
+    {
+      "id": "D126",
+      "name": "Wrenfield Clinics",
+      "owner": "Priya",
+      "pipeline_id": "renewals",
+      "pipeline": "Renewals",
+      "stage_id": "paused",
+      "stage": "Paused",
+      "stage_order": 2,
+      "status": "open",
+      "amount": 12000,
+      "close_date": "2026-12-18",
+      "next_step": "Restart call",
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D126"
+    },
+    {
+      "id": "D127",
+      "name": "Harbor Freightworks",
+      "owner": "Leo",
+      "pipeline_id": "default",
+      "pipeline": "Sales Pipeline",
+      "stage_id": "negotiation",
+      "stage": "Negotiation",
+      "stage_order": 4,
+      "status": "open",
+      "amount": 15000,
+      "close_date": "2026-10-30",
+      "next_step": "Hand to renewals",
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D127"
     }
   ]
 }

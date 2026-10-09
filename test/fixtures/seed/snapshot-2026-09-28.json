@@ -214,9 +214,55 @@
   "owner": "Leo",
   "stage": "Qualified",
   "amount": 32000,
-  "close_date": "2026-10-06",
+  "close_date": "2026-09-30",
   "next_step": "Security review",
   "next_step_date": "2026-10-09",
+  "status": "open"
+ },
+ {
+  "id": "D124",
+  "name": "Marlowe Systems",
+  "owner": "Marcus",
+  "stage": "Negotiation",
+  "amount": 30000,
+  "close_date": "2026-09-25",
+  "next_step": "",
+  "next_step_date": null,
+  "status": "lost"
+ },
+ {
+  "id": "D125",
+  "name": "Pemberton Labs",
+  "owner": "Priya",
+  "pipeline": "Renewals",
+  "stage": "Upcoming",
+  "amount": 36000,
+  "close_date": "2026-12-15",
+  "next_step": "Renewal call",
+  "next_step_date": "2026-10-12",
+  "status": "open"
+ },
+ {
+  "id": "D126",
+  "name": "Wrenfield Clinics",
+  "owner": "Priya",
+  "pipeline": "Renewals",
+  "stage": "Paused",
+  "amount": 12000,
+  "close_date": "2026-12-18",
+  "next_step": "Restart call",
+  "next_step_date": "2026-10-13",
+  "status": "open"
+ },
+ {
+  "id": "D127",
+  "name": "Harbor Freightworks",
+  "owner": "Leo",
+  "stage": "Negotiation",
+  "amount": 15000,
+  "close_date": "2026-10-30",
+  "next_step": "Hand to renewals",
+  "next_step_date": "2026-10-02",
   "status": "open"
  }
 ]

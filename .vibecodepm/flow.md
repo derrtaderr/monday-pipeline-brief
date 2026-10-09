@@ -3,7 +3,7 @@ name: monday-pipeline-brief user flow
 read_by: the pre-release walkthrough (walks the build against this), and any change to src/cli.mjs
 ---
 
-# Flow: monday-pipeline-brief v1
+# Flow: monday-pipeline-brief v1 (updated for v0.3)
 
 User: a RevOps manager or head of sales at a 50 to 500 person B2B SaaS company on HubSpot who
 rebuilds the Monday pipeline update by hand. Comfortable pasting a command into a terminal;
@@ -13,18 +13,36 @@ not necessarily a developer.
 
 1. **README on GitHub** (from a launch post). Reads the problem, sees the sample brief.
 2. **`node bin/monday-brief.mjs demo`** from a clone, or `npx github:derrtaderr/monday-pipeline-brief demo`. No token.
-3. **`run`** with `HUBSPOT_TOKEN` set, by hand the first time, then from cron or launchd weekly.
+3. **`run --since 7d`** (stateless) with `HUBSPOT_TOKEN` set, by hand the first time, then from a GitHub Action weekly; or **`run`** (stored snapshots), by hand the first time, then from cron or launchd weekly.
 4. **`help`**, `--help` after any command, or no arguments: prints usage, exit 0.
 
 ## Happy path
 
 1. Runs `demo`. Sees the full sample brief in the terminal, exit 0. Decides it is worth 5 minutes.
-2. Creates a HubSpot service key (or, on older accounts, a private app) with `crm.objects.deals.read` and `crm.objects.owners.read`, copies the `pat-` token.
+2. Creates a HubSpot service key (or, on older accounts, a private app) with `crm.objects.deals.read`, `crm.objects.owners.read` and `settings.currencies.read` (the third only stateless mode reads; the quickstart asks for all three), copies the `pat-` token.
 3. `export HUBSPOT_TOKEN=...`, runs `run`.
-4. **First run state (one snapshot).** Brief says "This is the first snapshot. A comparison needs two weekly runs, so the week-over-week sections start next week.", shows the open pipeline total and the "No next step, or no activity in 14+ days" list. Writes `~/.monday-pipeline-brief/snapshot-DATE.json` and `brief-DATE.md` (the same folder scheduled runs use) and appends a line to `run.log`. stderr: `Saved ... in <dir>`. Exit 0.
+4. **First run state (one snapshot).** Brief says "This is the first snapshot. A comparison needs two weekly runs, so the week-over-week sections start next week.", shows the open pipeline total, the "Close date passed" list and the "No next step, or no activity in 14+ days" list. Writes `~/.monday-pipeline-brief/snapshot-DATE.json` and `brief-DATE.md` (the same folder scheduled runs use) and appends a line to `run.log`. stderr: `Saved ... in <dir>`. Exit 0.
 5. Schedules it weekly using the README's cron or launchd block.
-6. **Second weekly run (activation).** Brief opens with "Compared with the snapshot from <date>.", the headline with delta and won/lost, "Look at these first", then slipped, moved back, stale, moved forward, new, closed. Exit 0.
+6. **Second weekly run (activation).** Brief opens with "Compared with the snapshot from <date>.", the headline with delta and won/lost, "How the open pipeline changed" (the dollar bridge from last week's open total to this week's, in exact dollars that add up), "Look at these first" (each line ends with why it is there: warning signs, large deal, or slipped into a later quarter), then close date passed, slipped, moved back, stale, moved forward, changed stage, moved to another pipeline, amount changed, new, reopened, closed, removed from HubSpot. Each deal name links to its HubSpot record. Exit 0.
+6a. Optional: `--group-by owner` (or `pipeline`, or `MONDAY_BRIEF_GROUP_BY`) keeps the headline and bridge on top, then one heading per rep or pipeline with its own sections. `--large-deal AMOUNT` (or `MONDAY_BRIEF_LARGE_DEAL`, or `off`) sets what counts as a large deal; the default is the largest open deals, at most 10% of them (at least one, unless every deal above $0 has the same amount and they outnumber that limit).
 7. Optional: sets `SLACK_WEBHOOK_URL`; the brief also posts to Slack as mrkdwn; stderr "Posted the brief to Slack."
+
+## Stateless path (v0.3)
+
+1. Creates the key with a third scope, `settings.currencies.read`, and runs `run --since 7d` (or `--as-of <ISO instant>`, or `MONDAY_BRIEF_SINCE=7d`).
+2. **First run is a full brief.** It opens "Compared with HubSpot as of <date>, rebuilt from property history.", then the same sections as the second weekly run in the happy path (step 6 above), with no first-snapshot message. Deals HubSpot's history could not rebuild are in "Could not rebuild as of <date>" and on a "Could not rebuild" bridge line; the start line splits rebuilt from partly rebuilt amounts and the headline says what the start total leaves out. stderr: "Stateless run: compared with HubSpot as of <instant>; no snapshot was saved." Exit 0. Nothing is written except `--out`; no snapshot folder, no run.log.
+3. Schedules it with `examples/github-action.yml` in a repository of their own; the brief goes to Slack.
+
+| State | What the user sees | Exit | Files written |
+|---|---|---|---|
+| Portal with more than one currency | "This HubSpot portal uses more than one currency. Stateless mode has not been validated on multi-currency portals... Run without --since or --as-of to use stored snapshots" "No brief was written." | 5 | none |
+| Token lacks settings.currencies.read | "HubSpot refused the currency settings (403). Stateless mode needs the settings.currencies.read scope..." "No brief was written." | 5 | none |
+| Bad --since, --as-of, both, or --dir with either | Usage error naming the flag, plus usage | 1 | none |
+| HubSpot failure during the read | The HubSpot message, then "No brief was written." | 2 | none |
+| A batch read of archived deals comes back partial (207 with errors, or fewer records) | "HubSpot's batch read of archived deals returned N of M deals... A partial read is never used; try again later." "No brief was written." | 2 | none |
+| stdout is not a terminal, no `--out`, no Slack | Brief on stdout, then "The brief went to standard output only: it was not saved or posted anywhere. Add --out FILE or set SLACK_WEBHOOK_URL to keep it." | 0 | none |
+| Slack post fails, no `--out` | "Slack post failed (...). The brief was printed above." in a terminal; elsewhere "The brief went to standard output only and was not saved; add --out FILE to keep a copy." | 3 | none |
+| `--dir` while `MONDAY_BRIEF_SINCE` is set | "--dir is for stored snapshots, but MONDAY_BRIEF_SINCE turns on stateless mode... Unset MONDAY_BRIEF_SINCE to use --dir." plus usage | 1 | none |
 
 ## States
 
@@ -32,11 +50,18 @@ not necessarily a developer.
 
 | State | What the user sees | Exit | Files written |
 |---|---|---|---|
-| Demo | Sample brief on stdout (and `--out FILE` if given) | 0 | only `--out` |
+| Demo | Sample brief on stdout (and `--out FILE` if given), then one stderr line: "This was sample data from a made-up HubSpot portal, so its links go nowhere useful. Set HUBSPOT_TOKEN and run `<command> run --since 7d` for your own pipeline." | 0 | only `--out` |
 | Demo, `--out` unwritable | Brief on stdout, then "Could not write the demo brief to <file> (<code>). The brief above was printed but not saved." | 4 | none |
-| First run, one snapshot | First-snapshot message, open total, stale list | 0 | snapshot, brief, run.log line |
+| First run, one snapshot | First-snapshot message, open total, close date passed list, stale list | 0 | snapshot, brief, run.log line |
 | Normal weekly run | Full brief | 0 | snapshot, brief, run.log line |
-| Nothing changed | Headline "flat on last week", "Nothing flagged this week." | 0 | snapshot, brief, run.log line |
+| Nothing changed | Headline "flat on last week", no bridge (every line would be zero), "Nothing flagged this week." | 0 | snapshot, brief, run.log line |
+| Grouped run (`--group-by owner` or `pipeline`) | Headline and bridge for the whole pipeline, then "## <rep or pipeline>, open $X across N deals" headings in order of open total, each with its sections (10 per section per group) or "Nothing flagged." | 0 | snapshot, brief, run.log line |
+| Pipeline reordered in HubSpot settings | No deal is listed as moved unless its stage changed | 0 | snapshot, brief, run.log line |
+| A deal left a stage that has since been deleted | Listed under "Changed stage", old stage to new, with no back or forward | 0 | snapshot, brief, run.log line |
+| Deal deleted or archived since last week | Listed under "Removed from HubSpot" and as a bridge line | 0 | snapshot, brief, run.log line |
+| Baseline written by v0.1 (no deal links) | Loads as before; deals that exist only in that snapshot (removed deals) show a plain name | 0 | snapshot, brief, run.log line |
+| `--large-deal` or `MONDAY_BRIEF_LARGE_DEAL` not an amount | "--large-deal needs an amount in dollars such as 50000, 50K or 1.5M, or off (got "...")" plus usage. Nothing fetched | 1 | none |
+| `--group-by` or `MONDAY_BRIEF_GROUP_BY` not owner or pipeline | "--group-by must be owner or pipeline (got "...")" plus usage. Nothing fetched | 1 | none |
 | Same-day re-run | Today's snapshot overwritten; still compares with the same earlier baseline | 0 | snapshot (overwritten), brief (overwritten), run.log line |
 | Ad-hoc mid-week run, then the scheduled run | The scheduled brief compares with the newest snapshot at least 6 days old, not the mid-week one; with none that old, the newest earlier one | 0 | snapshot, brief, run.log line |
 | Skipped week(s) (machine asleep or off, job missed) | Compares with the newest snapshot at least 6 days old. A gap of 6 to 8 days reads "last week"; any other gap reads "Compared with the snapshot from Sep 21, 2 weeks ago.", "up $39K since Sep 21", "New since Sep 21", "Nothing flagged since Sep 21.", and the heading drops "week of" | 0 | snapshot, brief, run.log line |
@@ -61,6 +86,7 @@ not necessarily a developer.
 | Scheduled run did not happen | `tail ~/.monday-pipeline-brief/run.log` shows no new line; README points to a missing or misnamed `~/.monday-brief.env` (the shell stops before the tool starts; `ls -l ~/.monday-brief.env`), `which node`, macOS privacy controls (TCC) on ~/Documents, ~/Desktop, ~/Downloads, cron mail, `launchctl list`, `/tmp/monday-brief.launchd.log` (status messages only; launchd stdout goes to /dev/null) | n/a | n/a |
 | `help`, `--help`, `run --help`, `demo --help` | Usage on stdout | 0 | none |
 | Unknown command or option | Message plus usage on stderr | 1 | none |
+| `demo --dir` | "--dir is for run; demo reads bundled sample data" plus usage on stderr | 1 | none |
 | Unexpected error during `run` | "Unexpected error: <message with secrets redacted>" | 1 | run.log line, possibly a snapshot |
 
 ## Recovery

@@ -30,6 +30,9 @@ function readSnapshot(file) {
     d.id = String(d.id);
     d.amount = Number(d.amount) || 0;
   });
+  // One record per deal id (the first), as buildSnapshot writes them.
+  const seen = new Set();
+  data.deals = data.deals.filter((d) => !seen.has(d.id) && seen.add(d.id));
   return data;
 }
 

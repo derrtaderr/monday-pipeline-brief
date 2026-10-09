@@ -4,10 +4,11 @@ The design of v1: what it does, the choices behind it, and the checks that hold 
 
 ## The problem
 
-A CRM stores what is true about a deal right now. It does not store what changed since last
-week. So every Monday a RevOps manager or head of sales at a 50 to 500 person B2B SaaS company
-on HubSpot exports the deals, opens last week's export next to it, and rebuilds "what moved"
-by hand. This tool keeps the weekly history on the user's own disk and writes that readout.
+Every Monday a RevOps manager or head of sales at a 50 to 500 person B2B SaaS company on
+HubSpot wants one readout of what changed in the pipeline since last week, and often rebuilds
+it by hand from exports. This tool keeps a weekly snapshot on the user's own disk and writes
+that readout. (Wording corrected in v0.2: HubSpot does keep property history; the earlier text
+said it stored only current state.)
 
 ## Scope (v1)
 
@@ -24,7 +25,7 @@ by hand. This tool keeps the weekly history on the user's own disk and writes th
    optionally a Slack incoming webhook).
 5. `demo` command: keyless, runs on bundled fictional fixture snapshots and prints the sample brief.
 6. First run (one snapshot only): say plainly that a comparison needs two weekly runs, and still
-   print the current-state parts (open pipeline total, the stale next step section).
+   print the current-state parts (open pipeline total, the stale next step section; from v0.2 also Close date passed).
 
 Not in v1: Salesforce, hosting, telemetry, a UI, a scheduler (README documents cron and launchd).
 

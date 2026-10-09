@@ -108,3 +108,10 @@ test('an unreadable week-old snapshot falls back to the next older readable one,
   assert.equal(r.snapshot.date, '2026-10-02');
   assert.deepEqual(r.skipped.map((s) => s.file), ['snapshot-2026-09-28.json']);
 });
+
+test('a snapshot that lists a deal id twice loads it once, so the bridge can balance', () => {
+  const dir = tmp();
+  writeRaw(dir, '2026-09-28', JSON.stringify({ schema: 1, date: '2026-09-28', deals: [{ id: 1, amount: 5 }, { id: '1', amount: 7 }, { id: 2, amount: 1 }] }));
+  const { snapshot } = findPrevious(dir, '2026-10-05');
+  assert.deepEqual(snapshot.deals.map((d) => [d.id, d.amount]), [['1', 5], ['2', 1]]);
+});

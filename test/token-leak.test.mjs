@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { main } from '../src/cli.mjs';
 import { writeSnapshot } from '../src/store.mjs';
 import { capture } from './helpers/io.mjs';
-import { fakeFetch, happyRoutes, respond } from './helpers/fake-hubspot.mjs';
+import { fakeFetch, happyRoutes, respond, statelessRoutes } from './helpers/fake-hubspot.mjs';
 
 // Shaped like a real HubSpot service key or private app token.
 const TOKEN = ['pat', 'na1', '8c1f2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f'].join('-');
@@ -71,3 +71,31 @@ test('a non-JSON HubSpot response is a plain HubSpot error, exit 2', async () =>
   assert.equal(code, 2);
   assert.match(stderr.text, /not valid JSON/);
 });
+
+const statelessScenarios = {
+  'stateless run': () => statelessRoutes(),
+  'stateless currency 403': () => ({ ...statelessRoutes(), '/settings/v3/currencies/exchange-rates/current': [() => respond(403, { message: TOKEN })] }),
+  'stateless batch read 401': () => ({ ...statelessRoutes(), '/crm/v3/objects/deals/batch/read': [() => respond(401, { message: TOKEN })], '/crm/v3/objects/deals/batch/read?archived=true': [() => respond(401, { message: TOKEN })] }),
+  'stateless slack down': () => ({ ...statelessRoutes(), '/services/T000/B000/XXXXSECRETXXXX': [() => respond(500, TOKEN)] }),
+};
+
+for (const [name, routes] of Object.entries(statelessScenarios)) {
+  test(`no token or webhook URL in any output: ${name}`, async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mpb-leak-'));
+    const outFile = join(dir, 'out', 'brief.md');
+    const stdout = capture();
+    const stderr = capture();
+    const r = routes();
+    r['/services/T000/B000/XXXXSECRETXXXX'] ??= [() => new Response('ok')];
+    const code = await main(['run', '--since', '7d', '--out', outFile], {
+      env: { HUBSPOT_TOKEN: TOKEN, SLACK_WEBHOOK_URL: HOOK }, fetch: fakeFetch(r), sleep: async () => {}, stdout, stderr, now: NOW, cwd: dir, home: dir,
+    });
+    assert.equal(typeof code, 'number');
+    const texts = [stdout.text, stderr.text, ...allFiles(dir).map((f) => readFileSync(f, 'utf8'))];
+    for (const t of texts) {
+      assert.ok(!t.includes(TOKEN), `token leaked in ${name}`);
+      assert.ok(!t.includes('8c1f2d3e-4a5b'), `token fragment leaked in ${name}`);
+      assert.ok(!t.includes('XXXXSECRETXXXX'), `webhook leaked in ${name}`);
+    }
+  });
+}

@@ -1,0 +1,26 @@
+# Copy this file to .github/workflows/monday-brief.yml in a repository of your own.
+# It keeps no state: every Monday it rebuilds last week from HubSpot property history,
+# compares it with today and posts the brief to Slack. Nothing is stored between runs.
+# Add two repository secrets first: HUBSPOT_TOKEN and SLACK_WEBHOOK_URL. Without the Slack
+# secret the job fails at once, since Slack is the only place the brief goes.
+name: Monday pipeline brief
+on:
+  schedule:
+    - cron: '0 12 * * 1' # Mondays 12:00 UTC
+  workflow_dispatch: {}
+permissions: {}
+jobs:
+  brief:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # The brief goes to Slack. Its printed copy is thrown away, so deal names never
+      # reach the workflow log, which anyone with read access to the repository can open.
+      - run: |
+          test -n "$SLACK_WEBHOOK_URL" || { echo "::error::Add the SLACK_WEBHOOK_URL secret: this job sends the brief to Slack only."; exit 1; }
+          npx --yes github:derrtaderr/monday-pipeline-brief#v0.3.0 run --since 7d > /dev/null
+        env:
+          HUBSPOT_TOKEN: ${{ secrets.HUBSPOT_TOKEN }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

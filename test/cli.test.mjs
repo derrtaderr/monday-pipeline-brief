@@ -14,6 +14,7 @@ const tmp = () => mkdtempSync(join(tmpdir(), 'mpb-cli-'));
 
 async function run(argv, opts = {}) {
   const stdout = capture();
+  if (opts.tty) stdout.isTTY = true;
   const stderr = capture();
   const fetch = opts.fetch ?? fakeFetch(happyRoutes());
   const code = await main(argv, { env: opts.env ?? {}, fetch, sleep: async () => {}, stdout, stderr, now: opts.now ?? NOW, cwd: opts.cwd ?? tmp(), home: opts.home ?? tmp() });
@@ -24,7 +25,7 @@ test('demo prints the sample brief with no token', async () => {
   const r = await run(['demo']);
   assert.equal(r.code, 0);
   assert.match(r.out, /^# Monday pipeline brief, week of Oct 5\n/);
-  assert.match(r.out, /Open pipeline \$1\.25M across 21 deals/);
+  assert.match(r.out, /Open pipeline \$1\.29M across 23 deals/);
   assert.equal(r.fetch.calls.length, 0);
 });
 
@@ -33,7 +34,7 @@ test('demo --out also writes the brief to a file', async () => {
   const r = await run(['demo', '--out', file]);
   assert.equal(r.code, 0);
   assert.equal(readFileSync(file, 'utf8'), r.out);
-  assert.equal(r.err, `Saved the demo brief to ${file}\n`);
+  assert.match(r.err, new RegExp(`Saved the demo brief to ${file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\n$`));
 });
 
 test('help and no arguments print usage', async () => {
@@ -105,14 +106,17 @@ test('a real-shaped portal with little logged activity: only honest stale flags,
   const r = await run(['run', '--dir', dir], { env: { HUBSPOT_TOKEN: TOKEN }, fetch: fakeFetch(routes) });
   assert.equal(r.code, 0, r.err);
   assert.match(r.out, /Compared with the snapshot from Sep 28\./);
-  const section = (title) => r.out.split(`**${title}**`)[1]?.split('\n\n')[0] ?? '';
+  assert.match(r.out, /- \[Larkspur Analytics\]\(https:\/\/app-na2\.hubspot\.com\/contacts\/12345678\/record\/0-3\/900000000101\), \$60K/);
+  const plain = r.out.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+  const section = (title) => plain.split(`**${title}**`)[1]?.split('\n\n')[0] ?? '';
   assert.deepEqual(section('No next step, or no activity in 14+ days').split('\n').slice(1), [
     '- Larkspur Analytics, $60K, Dana Ruiz: no next step',
     '- Copperfield Supply, $42K, Leo: no activity logged since it was created Sep 20',
     '- Bramblewood Cafe, $1K, Unassigned: no next step',
   ]);
   assert.deepEqual(section('Look at these first').split('\n').slice(1), [
-    '- Copperfield Supply, $42K, Leo: close date slipped, no activity in 14+ days',
+    '- Larkspur Analytics, $60K, Dana Ruiz: no next step (large deal)',
+    '- Copperfield Supply, $42K, Leo: close date slipped, no activity in 14+ days (2 warning signs)',
   ]);
   assert.doesNotMatch(r.out, /next step set, no activity logged/);
   const snap = JSON.parse(readFileSync(join(dir, 'snapshot-2026-10-05.json'), 'utf8'));
@@ -407,4 +411,276 @@ test('a snapshot folder that is writable but not readable is a named setup error
   } finally {
     chmodSync(dir, 0o700);
   }
+});
+
+async function realShapedRun(argv, env = {}) {
+  const dir = tmp();
+  writeSnapshot(dir, {
+    schema: 1, taken_at: '2026-09-28T07:00:00.000Z', date: '2026-09-28', source: 'hubspot',
+    deals: [{ id: '900000000102', name: 'Copperfield Supply', owner: 'Leo', pipeline_id: 'default', pipeline: 'Sales Pipeline', stage_id: 'presentationscheduled', stage: 'Demo', stage_order: 2, status: 'open', amount: 42000, close_date: '2026-11-20', next_step: 'Send pricing', last_activity: null }],
+  });
+  const routes = happyRoutes();
+  routes['/crm/v3/objects/deals'] = [() => respond(200, fixture('deals-real-shape.json'))];
+  return run(['run', '--dir', dir, ...argv], { env: { HUBSPOT_TOKEN: TOKEN, ...env }, fetch: fakeFetch(routes) });
+}
+const lookFirstNames = (out) => (out.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').split('**Look at these first**')[1]?.split('\n\n')[0] ?? '').split('\n').slice(1).map((l) => l.split(',')[0].slice(2));
+
+test('--large-deal and MONDAY_BRIEF_LARGE_DEAL set the large-deal threshold or turn it off; the flag wins', async () => {
+  const cases = [
+    [[], {}, ['Larkspur Analytics', 'Copperfield Supply']],
+    [['--large-deal', 'off'], {}, ['Copperfield Supply']],
+    [[], { MONDAY_BRIEF_LARGE_DEAL: 'off' }, ['Copperfield Supply']],
+    [['--large-deal=100K'], {}, ['Copperfield Supply']],
+    [['--large-deal', '1K'], { MONDAY_BRIEF_LARGE_DEAL: 'off' }, ['Larkspur Analytics', 'Copperfield Supply', 'Bramblewood Cafe']],
+  ];
+  for (const [argv, env, names] of cases) {
+    const r = await realShapedRun(argv, env);
+    assert.equal(r.code, 0, r.err);
+    assert.deepEqual(lookFirstNames(r.out), names, JSON.stringify([argv, env]));
+  }
+});
+
+test('a large-deal value that is not an amount is a usage error before HubSpot is called', async () => {
+  for (const [argv, env] of [[['--large-deal', 'lots'], {}], [[], { MONDAY_BRIEF_LARGE_DEAL: '50 grand' }], [['--large-deal'], {}]]) {
+    const r = await run(['run', ...argv], { env: { HUBSPOT_TOKEN: TOKEN, ...env } });
+    assert.equal(r.code, 1, JSON.stringify([argv, env]));
+    assert.match(r.err, /large-deal|MONDAY_BRIEF_LARGE_DEAL/i);
+    assert.equal(r.fetch.calls.length, 0);
+  }
+});
+
+test('large-deal amounts read as dollars, with K and M suffixes, a $ sign, commas and off', async () => {
+  const { largeDealSetting } = await import('../src/cli.mjs');
+  assert.equal(largeDealSetting('50000'), 50000);
+  assert.equal(largeDealSetting('50K'), 50000);
+  assert.equal(largeDealSetting('$50k'), 50000);
+  assert.equal(largeDealSetting('1.5M'), 1500000);
+  assert.equal(largeDealSetting('75,000'), 75000);
+  assert.equal(largeDealSetting('OFF'), false);
+  assert.equal(largeDealSetting(undefined), undefined);
+  assert.equal(largeDealSetting(''), undefined);
+  assert.throws(() => largeDealSetting('-5'));
+});
+
+test('--group-by and MONDAY_BRIEF_GROUP_BY group the brief by owner or pipeline; the flag wins', async () => {
+  const cases = [
+    [['--group-by', 'owner'], {}, /^## Dana Ruiz, open /m],
+    [['--group-by=pipeline'], {}, /^## Sales Pipeline, open /m],
+    [[], { MONDAY_BRIEF_GROUP_BY: 'Owner' }, /^## Dana Ruiz, open /m],
+    [['--group-by', 'pipeline'], { MONDAY_BRIEF_GROUP_BY: 'owner' }, /^## Sales Pipeline, open /m],
+  ];
+  for (const [argv, env, heading] of cases) {
+    const r = await realShapedRun(argv, env);
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, heading, JSON.stringify([argv, env]));
+  }
+  const flat = await realShapedRun([]);
+  assert.doesNotMatch(flat.out, /^## /m);
+});
+
+test('a --group-by value other than owner or pipeline is a usage error before HubSpot is called', async () => {
+  for (const [argv, env] of [[['--group-by', 'team'], {}], [[], { MONDAY_BRIEF_GROUP_BY: 'region' }]]) {
+    const r = await run(['run', ...argv], { env: { HUBSPOT_TOKEN: TOKEN, ...env } });
+    assert.equal(r.code, 1);
+    assert.match(r.err, /group-by|MONDAY_BRIEF_GROUP_BY/i);
+    assert.match(r.err, /owner or pipeline/);
+    assert.equal(r.fetch.calls.length, 0);
+  }
+});
+
+test('demo --group-by owner prints the sample brief grouped by rep', async () => {
+  const r = await run(['demo', '--group-by', 'owner']);
+  assert.equal(r.code, 0, r.err);
+  assert.match(r.out, /^## Dana, open /m);
+  assert.match(r.out, /^## Leo, open /m);
+});
+
+test('after the demo brief, one line on stderr says it was sample data and what to run next', async () => {
+  const r = await run(['demo']);
+  assert.equal(r.code, 0);
+  assert.equal(r.err, 'This was sample data from a made-up HubSpot portal, so its links go nowhere useful. Set HUBSPOT_TOKEN and run `node bin/monday-brief.mjs run --since 7d` for your own pipeline.\n');
+  assert.doesNotMatch(r.out, /sample data/);
+});
+
+test('demo --dir is a usage error, exit 1, with nothing printed to stdout', async () => {
+  for (const argv of [['demo', '--dir', '/tmp/x'], ['demo', '--dir=/tmp/x']]) {
+    const r = await run(argv);
+    assert.equal(r.code, 1, argv.join(' '));
+    assert.equal(r.out, '');
+    assert.match(r.err, /^--dir is for run; demo reads bundled sample data\n\nmonday-pipeline-brief/);
+  }
+});
+
+// Stateless mode: run --since / --as-of.
+import { statelessRoutes } from './helpers/fake-hubspot.mjs';
+
+const stateless = (argv, opts = {}) => run(argv, { ...opts, env: { HUBSPOT_TOKEN: TOKEN, ...opts.env }, fetch: opts.fetch ?? fakeFetch(opts.routes ?? statelessRoutes()) });
+
+test('run --since 7d rebuilds last week from history and prints the brief, writing nothing to disk', async () => {
+  const home = tmp();
+  const cwd = tmp();
+  const r = await stateless(['run', '--since', '7d'], { home, cwd });
+  assert.equal(r.code, 0, r.err);
+  assert.match(r.out, /^# Monday pipeline brief, week of Oct 5\n/);
+  assert.match(r.out, /^Compared with HubSpot as of Sep 28, rebuilt from property history\.$/m);
+  assert.match(r.out, /\*\*Moved forward\*\* \(1\)\n- \[History deal 7001\]/);
+  assert.match(r.out, /\*\*New this week\*\* \(1\)\n- \[History deal 7003\]/);
+  assert.match(r.out, /\*\*Removed from HubSpot\*\* \(1\)\n- \[History deal 7004\]/);
+  assert.match(r.out, /History deal 7002\]\([^)]*\), \$10K, Dana Ruiz: Nov 1 → Dec 15 \(\+44 days, pushed 2 times\)/);
+  assert.deepEqual(readdirSync(home), [], 'no snapshot folder, no run.log');
+  assert.deepEqual(readdirSync(cwd), []);
+  assert.match(r.err, /stateless/i);
+  assert.match(r.err, /no snapshot was saved/i);
+});
+
+test('run --since reads the currency settings first, then the history read path', async () => {
+  const r = await stateless(['run', '--since', '7d']);
+  assert.equal(r.code, 0, r.err);
+  assert.deepEqual(r.fetch.calls.map((c) => `${c.method} ${c.key}`), [
+    'GET /settings/v3/currencies/exchange-rates/current',
+    'GET /crm/v3/objects/deals', 'GET /crm/v3/objects/deals?after=h2',
+    'GET /crm/v3/objects/deals?archived=true',
+    'POST /crm/v3/objects/deals/batch/read?archived=true',
+    'GET /crm/v3/pipelines/deals', 'GET /crm/v3/pipelines/deals/default/audit', 'GET /crm/v3/pipelines/deals/renewals/audit',
+    'GET /crm/v3/owners', 'GET /crm/v3/owners?archived=true',
+  ]);
+  assert.deepEqual(r.fetch.calls[4].body.inputs, [{ id: '7004' }], 'only the deal archived after T is batch read');
+});
+
+test('run --as-of takes an ISO instant with a zone', async () => {
+  const r = await stateless(['run', '--as-of', '2026-09-28T12:00:00Z']);
+  assert.equal(r.code, 0, r.err);
+  assert.match(r.out, /^Compared with HubSpot as of Sep 28, rebuilt from property history\.$/m);
+});
+
+test('MONDAY_BRIEF_SINCE turns on stateless mode for scheduled jobs; the flag wins', async () => {
+  const r = await stateless(['run'], { env: { MONDAY_BRIEF_SINCE: '7d' } });
+  assert.equal(r.code, 0, r.err);
+  assert.match(r.out, /rebuilt from property history/);
+  const flag = await stateless(['run', '--since', '3d'], { env: { MONDAY_BRIEF_SINCE: '7d' } });
+  assert.match(flag.out, /^Compared with HubSpot as of Oct 2, 3 days ago, rebuilt from property history\.$/m);
+});
+
+for (const [name, argv, pattern] of [
+  ['--since without a day count', ['run', '--since', '7'], /--since needs a number of days from 1 to 90, such as 7d/],
+  ['--since 0d', ['run', '--since', '0d'], /--since needs a number of days from 1 to 90/],
+  ['--since 91d', ['run', '--since', '91d'], /--since needs a number of days from 1 to 90/],
+  ['--as-of with no zone', ['run', '--as-of', '2026-09-28T05:00:00'], /--as-of needs an ISO instant with a time and a zone/],
+  ['--as-of a date only', ['run', '--as-of', '2026-09-28'], /--as-of needs an ISO instant with a time and a zone/],
+  ['--as-of in the future', ['run', '--as-of', '2026-10-06T00:00:00Z'], /--as-of must be in the past/],
+  ['--as-of over 90 days ago', ['run', '--as-of', '2026-06-01T00:00:00Z'], /at most 90 days ago/],
+  ['--since and --as-of together', ['run', '--since', '7d', '--as-of', '2026-09-28T05:00:00Z'], /--since or --as-of, not both/],
+  ['--dir with --since', ['run', '--since', '7d', '--dir', '/tmp/x'], /--dir is for stored snapshots; stateless mode \(--since or --as-of\) keeps no snapshot folder/],
+]) {
+  test(`a usage error, exit 1, nothing fetched: ${name}`, async () => {
+    const r = await stateless(argv);
+    assert.equal(r.code, 1);
+    assert.match(r.err, pattern);
+    assert.equal(r.fetch.calls.length, 0);
+  });
+}
+
+test('a portal with more than one currency refuses stateless mode with exit 5, and reads no deal', async () => {
+  const routes = statelessRoutes();
+  routes['/settings/v3/currencies/exchange-rates/current'] = [() => respond(200, { results: [{ fromCurrencyCode: 'EUR', toCurrencyCode: 'USD', conversionRate: '1.08' }] })];
+  const r = await stateless(['run', '--since', '7d'], { routes });
+  assert.equal(r.code, 5);
+  assert.match(r.err, /more than one currency/);
+  assert.match(r.err, /without --since or --as-of/);
+  assert.equal(r.out, '');
+  assert.equal(r.fetch.calls.length, 1);
+});
+
+test('a token without settings.currencies.read refuses stateless mode with exit 5, naming the scope', async () => {
+  const routes = statelessRoutes();
+  routes['/settings/v3/currencies/exchange-rates/current'] = [() => respond(403, fixture('error-403.json'))];
+  const r = await stateless(['run', '--since', '7d'], { routes });
+  assert.equal(r.code, 5);
+  assert.match(r.err, /settings\.currencies\.read/);
+  assert.equal(r.fetch.calls.length, 1);
+});
+
+test('a HubSpot failure in stateless mode exits 2 and says no brief was written', async () => {
+  const routes = statelessRoutes();
+  routes['/crm/v3/objects/deals?archived=true'] = [() => respond(401, {})];
+  const r = await stateless(['run', '--since', '7d'], { routes });
+  assert.equal(r.code, 2);
+  assert.match(r.err, /HubSpot rejected the token \(401\)/);
+  assert.match(r.err, /No brief was written/);
+  assert.equal(r.out, '');
+});
+
+test('stateless --out writes the brief there and nothing else', async () => {
+  const home = tmp();
+  const file = join(tmp(), 'brief.md');
+  const r = await stateless(['run', '--since', '7d', '--out', file], { home });
+  assert.equal(r.code, 0, r.err);
+  assert.equal(readFileSync(file, 'utf8'), r.out);
+  assert.deepEqual(readdirSync(home), []);
+});
+
+test('stateless mode posts to Slack when SLACK_WEBHOOK_URL is set', async () => {
+  const routes = statelessRoutes();
+  routes['/services/T000/B000/XXXX'] = [() => respond(200, 'ok')];
+  const r = await stateless(['run', '--since', '7d'], { routes, env: { SLACK_WEBHOOK_URL: 'https://hooks.slack.com/services/T000/B000/XXXX' } });
+  assert.equal(r.code, 0, r.err);
+  const post = r.fetch.calls.find((c) => c.key === '/services/T000/B000/XXXX');
+  assert.match(post.body.text, /rebuilt from property history/);
+  assert.match(r.err, /Posted the brief to Slack/);
+});
+
+test('help documents stateless mode, its scope and exit code 5', async () => {
+  const r = await run(['help']);
+  assert.match(r.out, /--since 7d/);
+  assert.match(r.out, /--as-of/);
+  assert.match(r.out, /settings\.currencies\.read/);
+  assert.match(r.out, /MONDAY_BRIEF_SINCE/);
+});
+
+test('a partial batch read in stateless mode exits 2 and prints no brief', async () => {
+  const routes = statelessRoutes();
+  routes['/crm/v3/objects/deals/batch/read?archived=true'] = [() => respond(207, { results: [], numErrors: 1, errors: [{ message: 'not found' }] })];
+  const r = await stateless(['run', '--since', '7d'], { routes });
+  assert.equal(r.code, 2);
+  assert.equal(r.out, '');
+  assert.match(r.err, /No brief was written/);
+});
+
+for (const day of ['2026-09-31', '2026-02-30']) {
+  test(`--as-of rejects a calendar date that does not exist: ${day}`, async () => {
+    const r = await stateless(['run', '--as-of', `${day}T12:00:00Z`]);
+    assert.equal(r.code, 1);
+    assert.match(r.err, new RegExp(`--as-of names a date that does not exist \\(${day}\\)`));
+    assert.equal(r.fetch.calls.length, 0);
+  });
+}
+
+test('stateless mode with no --out and no Slack, printing to something other than a terminal, says the brief went nowhere else', async () => {
+  const r = await stateless(['run', '--since', '7d']);
+  assert.equal(r.code, 0, r.err);
+  assert.match(r.err, /The brief went to standard output only: it was not saved or posted anywhere\. Add --out FILE or set SLACK_WEBHOOK_URL to keep it\./);
+  const tty = await stateless(['run', '--since', '7d'], { tty: true });
+  assert.doesNotMatch(tty.err, /went to standard output only/);
+  const saved = await stateless(['run', '--since', '7d', '--out', join(tmp(), 'b.md')]);
+  assert.doesNotMatch(saved.err, /went to standard output only/);
+});
+
+test('a failed Slack post in stateless mode never claims the brief was printed above when stdout is not a terminal', async () => {
+  const routes = statelessRoutes();
+  routes['/services/T000/B000/XXXX'] = [() => respond(500, 'no')];
+  const env = { SLACK_WEBHOOK_URL: 'https://hooks.slack.com/services/T000/B000/XXXX' };
+  const r = await stateless(['run', '--since', '7d'], { routes, env });
+  assert.equal(r.code, 3);
+  assert.doesNotMatch(r.err, /printed above/);
+  assert.match(r.err, /Slack post failed \(status 500\)\. The brief went to standard output only and was not saved; add --out FILE to keep a copy\./);
+  const routes2 = statelessRoutes();
+  routes2['/services/T000/B000/XXXX'] = [() => respond(500, 'no')];
+  const tty = await stateless(['run', '--since', '7d'], { routes: routes2, env, tty: true });
+  assert.match(tty.err, /The brief was printed above\./);
+});
+
+test('--dir refused because MONDAY_BRIEF_SINCE turned on stateless mode names that variable', async () => {
+  const r = await stateless(['run', '--dir', '/tmp/x'], { env: { MONDAY_BRIEF_SINCE: '7d' } });
+  assert.equal(r.code, 1);
+  assert.match(r.err, /--dir is for stored snapshots, but MONDAY_BRIEF_SINCE turns on stateless mode, which keeps no snapshot folder\. Unset MONDAY_BRIEF_SINCE to use --dir\./);
 });
