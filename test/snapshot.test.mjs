@@ -75,7 +75,7 @@ test('a real-shaped deals page becomes a correct snapshot', () => {
   const s = buildSnapshot({ ...raw, deals: fx('deals-real-shape.json').results });
   const d = Object.fromEntries(s.deals.map((x) => [x.name, x]));
   assert.deepEqual(d['Larkspur Analytics'], {
-    id: '900000000101', name: 'Larkspur Analytics', owner: 'Dana Ruiz',
+    id: '900000000101', name: 'Larkspur Analytics', owner: 'Dana Ruiz', owner_id: '101', deal_currency: null, deal_currency_amount: 60000,
     pipeline_id: 'default', pipeline: 'Sales Pipeline', stage_id: 'qualifiedtobuy', stage: 'Qualified', stage_order: 1,
     status: 'open', amount: 60000, close_date: '2026-11-13', next_step: '', last_activity: null, created: '2026-10-05',
     url: 'https://app-na2.hubspot.com/contacts/12345678/record/0-3/900000000101',
@@ -93,7 +93,7 @@ test('an unknown stage keeps its id, has no order and counts as open', () => {
 
 test('snapshot deals hold only the documented fields', () => {
   assert.deepEqual(Object.keys(byName.Northwind).sort(), [
-    'amount', 'close_date', 'created', 'id', 'last_activity', 'name', 'next_step', 'owner',
+    'amount', 'close_date', 'created', 'deal_currency', 'deal_currency_amount', 'id', 'last_activity', 'name', 'next_step', 'owner', 'owner_id',
     'pipeline', 'pipeline_id', 'stage', 'stage_id', 'stage_order', 'status', 'url',
   ]);
 });
@@ -168,4 +168,45 @@ test('the snapshot stores each pipeline stage layout: id, label, order and statu
     { id: 'b', label: 'Demo', order: 1, status: 'open' },
     { id: 'w', label: 'Won', order: 2, status: 'won' },
   ] }]);
+});
+
+// F4: owners are told apart by id, and two owners with one display name by email (or id).
+test('each deal row carries its owner id; an unassigned deal has none', () => {
+  assert.equal(byName.Northwind.owner_id, '101');
+  assert.equal(byName.Meridian.owner_id, null);
+  assert.equal(byName['Acme renewal'].owner_id, '555');
+});
+
+test('two owners with the same name are told apart by email, or by id when the email cannot', () => {
+  const deal = (id, owner) => ({ id, properties: { dealname: `D${id}`, pipeline: 'p1', dealstage: 's1', amount: '1', hubspot_owner_id: owner } });
+  const s = buildSnapshot({
+    deals: [deal('1', '201'), deal('2', '202'), deal('3', '203'), deal('4', '204'), deal('5', '205'), deal('6', '206')],
+    pipelines: [{ id: 'p1', label: 'P', stages: [{ id: 's1', label: 'S', displayOrder: 0 }] }],
+    owners: [
+      { id: '201', firstName: 'Dana', lastName: 'Ruiz', email: 'dana@a.com' },
+      { id: '202', firstName: 'Dana', lastName: 'Ruiz', email: 'dana.ruiz@b.com' },
+      { id: '203', firstName: 'Sam', lastName: 'Lee', email: 'sam@a.com' },
+      { id: '204', firstName: 'Sam', lastName: 'Lee', email: 'sam@a.com' },
+      { id: '205', firstName: 'Kim', lastName: 'Park' },
+      { id: '205', firstName: 'Kim', lastName: 'Park' },
+      { id: '206', firstName: 'Ana', lastName: 'Diaz' },
+    ],
+    takenAt: new Date('2026-10-05T07:00:00.000Z'),
+    date: '2026-10-05',
+  });
+  assert.deepEqual(s.deals.map((d) => [d.owner_id, d.owner]), [
+    ['201', 'Dana Ruiz (dana@a.com)'], ['202', 'Dana Ruiz (dana.ruiz@b.com)'],
+    ['203', 'Sam Lee (owner 203)'], ['204', 'Sam Lee (owner 204)'],
+    ['205', 'Kim Park'], ['206', 'Ana Diaz'],
+  ]);
+});
+
+// F7: on a multi-currency portal the home-currency amount moves with exchange rates, so the
+// deal's own currency and amount are kept beside it.
+test('each deal row keeps its own currency and amount in that currency when HubSpot returns them', () => {
+  assert.equal(byName['Cobalt Labs'].deal_currency, 'EUR');
+  assert.equal(byName['Cobalt Labs'].deal_currency_amount, 24000);
+  assert.equal(byName['Cobalt Labs'].amount, 26400);
+  assert.equal(byName.Northwind.deal_currency, null);
+  assert.equal(byName.Meridian.deal_currency_amount, null);
 });

@@ -415,3 +415,32 @@ test('a deal that went straight to a closed stage of another pipeline records th
   assert.deepEqual(r.bridge.won.count, 2);
   assert.deepEqual(r.transferred, []);
 });
+
+// F1: a deal closed at both ends of the comparison is never in the open pipeline, so it needs
+// its own list or it vanishes.
+test('a deal that flips between closed states, or whose closed amount changes, is Changed after closing, never Won or Lost', () => {
+  const r = compare(
+    snap('2026-09-28', [
+      deal({ id: '9', amount: 250000, status: 'won' }),
+      deal({ id: '10', amount: 40000, status: 'lost' }),
+      deal({ id: '11', amount: 80000, status: 'won' }),
+      deal({ id: '12', amount: 5000, status: 'won' }),
+    ]),
+    snap(TODAY, [
+      deal({ id: '9', amount: 250000, status: 'lost' }),
+      deal({ id: '10', amount: 45000, status: 'won' }),
+      deal({ id: '11', amount: 95000, status: 'won' }),
+      deal({ id: '12', amount: 5000, status: 'won' }),
+    ]),
+    TODAY,
+  );
+  assert.deepEqual(r.won, []);
+  assert.deepEqual(r.lost, []);
+  assert.deepEqual(r.changedAfterClose.map((c) => [c.deal.id, c.fromStatus, c.deal.status, c.fromAmount, c.deal.amount]), [
+    ['9', 'won', 'lost', 250000, 250000],
+    ['11', 'won', 'won', 80000, 95000],
+    ['10', 'lost', 'won', 40000, 45000],
+  ]);
+  assert.equal(r.bridge.start, 0);
+  assert.equal(r.bridge.end, 0);
+});

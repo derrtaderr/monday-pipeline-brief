@@ -41,3 +41,19 @@ test('negative amounts put the minus sign before the dollar sign', () => {
   assert.equal(money(-24000), '-$24K');
   assert.equal(money(-1250000), '-$1.25M');
 });
+
+// Each unit takes over where the smaller one would round up to 1,000 of itself, and anything that
+// rounds to zero prints $0 (never -$0).
+test('money switches unit where rounding would print 1,000 of the smaller one, and never prints -$0', () => {
+  assert.equal(money(999.5), '$1K');
+  assert.equal(money(999499), '$999K');
+  assert.equal(money(999500), '$1.00M');
+  assert.equal(money(999994999), '$999.99M');
+  assert.equal(money(999995000), '$1.00B');
+  assert.equal(money(1e9), '$1.00B');
+  assert.equal(money(2.5e9), '$2.50B');
+  assert.equal(money(-999500), '-$1.00M');
+  assert.equal(money(-0), '$0');
+  assert.equal(money(-0.4), '$0');
+  assert.equal(money(0.4), '$0');
+});

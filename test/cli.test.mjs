@@ -11,6 +11,7 @@ import { fakeFetch, happyRoutes, respond, fixture } from './helpers/fake-hubspot
 const TOKEN = ['pat', 'na1', '11111111-2222-3333-4444-555555555555'].join('-');
 const NOW = new Date(2026, 9, 5, 7, 0, 0); // local Oct 5 2026
 const tmp = () => mkdtempSync(join(tmpdir(), 'mpb-cli-'));
+const PKG = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
 async function run(argv, opts = {}) {
   const stdout = capture();
@@ -49,7 +50,7 @@ test('help and no arguments print usage', async () => {
 
 test('usage names the token as a HubSpot service key or private app token', async () => {
   const r = await run(['help']);
-  assert.match(r.out, /HUBSPOT_TOKEN\s+HubSpot service key or private app token \(scopes crm\.objects\.deals\.read, crm\.objects\.owners\.read\)/);
+  assert.match(r.out.replace(/\s+/g, ' '), /HUBSPOT_TOKEN HubSpot service key or private app token \(scopes crm\.objects\.deals\.read, crm\.objects\.owners\.read, and settings\.currencies\.read for stateless mode\)/);
   assert.doesNotMatch(r.out, /Private app access token/);
 });
 
@@ -236,7 +237,7 @@ test('messages use the command the user actually ran', async () => {
 });
 
 test('invocationFor tells npx, clone and absolute-path runs apart', () => {
-  assert.equal(invocationFor('/home/a/.npm/_npx/abc/node_modules/monday-pipeline-brief/bin/monday-brief.mjs', '/x'), 'npx github:derrtaderr/monday-pipeline-brief');
+  assert.equal(invocationFor('/home/a/.npm/_npx/abc/node_modules/monday-pipeline-brief/bin/monday-brief.mjs', '/x'), `npx github:derrtaderr/monday-pipeline-brief#v${PKG.version}`);
   assert.equal(invocationFor('/home/a/monday-pipeline-brief/bin/monday-brief.mjs', '/home/a/monday-pipeline-brief'), 'node bin/monday-brief.mjs');
   assert.equal(invocationFor('/home/a/monday-pipeline-brief/bin/monday-brief.mjs', '/tmp'), 'node /home/a/monday-pipeline-brief/bin/monday-brief.mjs');
 });
@@ -254,7 +255,19 @@ test('--no-next-step and MONDAY_BRIEF_NEXT_STEP=off turn the next step check off
 test('run warns on stderr about deals in unreadable stages', async () => {
   const r = await run(['run', '--dir', tmp()], { env: { HUBSPOT_TOKEN: TOKEN } });
   assert.equal(r.code, 0, r.err);
-  assert.match(r.err, /Warning: 1 deal \(\$1K\) is in a stage we couldn't read/);
+  assert.match(r.err, /Warning: 1 deal is in a stage we couldn't read/);
+  assert.match(r.out, /1 deal \(\$1K\) is in a stage we couldn't read/, 'the brief keeps the total');
+});
+
+// F8: stderr ends up in logs (a public GitHub Action's log is readable by anyone who can read the
+// repository), so it carries counts only, never a dollar amount.
+test('stderr never carries a dollar amount, in stored or stateless mode', async () => {
+  const stored = await run(['run', '--dir', tmp()], { env: { HUBSPOT_TOKEN: TOKEN } });
+  const sl = await stateless(['run', '--since', '7d']);
+  for (const r of [stored, sl]) {
+    assert.equal(r.code, 0, r.err);
+    assert.doesNotMatch(r.err, /\$\d/, r.err);
+  }
 });
 
 test('a token pasted with smart quotes fails at once with exit 1, names the cause, and never prints the token', async () => {
@@ -658,11 +671,13 @@ for (const day of ['2026-09-31', '2026-02-30']) {
 test('stateless mode with no --out and no Slack, printing to something other than a terminal, says the brief went nowhere else', async () => {
   const r = await stateless(['run', '--since', '7d']);
   assert.equal(r.code, 0, r.err);
-  assert.match(r.err, /The brief went to standard output only: it was not saved or posted anywhere\. Add --out FILE or set SLACK_WEBHOOK_URL to keep it\./);
+  // m4: true whether stdout is a pipe, a file redirect or /dev/null: the run itself kept nothing.
+  assert.match(r.err, /This run kept no copy of the brief of its own \(no --out, no SLACK_WEBHOOK_URL\)\. Unless standard output went to a file, add --out FILE or set SLACK_WEBHOOK_URL to keep it\./);
+  assert.doesNotMatch(r.err, /not saved or posted anywhere/);
   const tty = await stateless(['run', '--since', '7d'], { tty: true });
-  assert.doesNotMatch(tty.err, /went to standard output only/);
+  assert.doesNotMatch(tty.err, /kept no copy/);
   const saved = await stateless(['run', '--since', '7d', '--out', join(tmp(), 'b.md')]);
-  assert.doesNotMatch(saved.err, /went to standard output only/);
+  assert.doesNotMatch(saved.err, /kept no copy/);
 });
 
 test('a failed Slack post in stateless mode never claims the brief was printed above when stdout is not a terminal', async () => {
@@ -672,7 +687,7 @@ test('a failed Slack post in stateless mode never claims the brief was printed a
   const r = await stateless(['run', '--since', '7d'], { routes, env });
   assert.equal(r.code, 3);
   assert.doesNotMatch(r.err, /printed above/);
-  assert.match(r.err, /Slack post failed \(status 500\)\. The brief went to standard output only and was not saved; add --out FILE to keep a copy\./);
+  assert.match(r.err, /Slack post failed \(status 500\)\. This run kept no copy of the brief of its own; unless standard output went to a file, add --out FILE to keep one\./);
   const routes2 = statelessRoutes();
   routes2['/services/T000/B000/XXXX'] = [() => respond(500, 'no')];
   const tty = await stateless(['run', '--since', '7d'], { routes: routes2, env, tty: true });
@@ -683,4 +698,76 @@ test('--dir refused because MONDAY_BRIEF_SINCE turned on stateless mode names th
   const r = await stateless(['run', '--dir', '/tmp/x'], { env: { MONDAY_BRIEF_SINCE: '7d' } });
   assert.equal(r.code, 1);
   assert.match(r.err, /--dir is for stored snapshots, but MONDAY_BRIEF_SINCE turns on stateless mode, which keeps no snapshot folder\. Unset MONDAY_BRIEF_SINCE to use --dir\./);
+});
+
+// F2: every npx command the CLI prints for an npx user (help, the missing-token hint, the demo
+// footer) pins this release, so it never runs whatever the repository holds later.
+test('every npx command the CLI prints is pinned to this version', async () => {
+  const invocation = invocationFor('/home/a/.npm/_npx/abc/node_modules/monday-pipeline-brief/bin/monday-brief.mjs', '/x');
+  const texts = [];
+  for (const argv of [['help'], ['run'], ['demo'], ['run', '--since', '7d'], ['frobnicate']]) {
+    const stdout = capture();
+    const stderr = capture();
+    await main(argv, { env: {}, stdout, stderr, now: NOW, cwd: tmp(), home: tmp(), invocation });
+    texts.push(stdout.text, stderr.text);
+  }
+  const all = texts.join('\n');
+  const commands = [...all.matchAll(/npx (?:--yes )?github:\S+/g)].map((m) => m[0]);
+  assert.ok(commands.length >= 5, all);
+  for (const c of commands) assert.equal(c, `npx github:derrtaderr/monday-pipeline-brief#v${PKG.version}`);
+});
+
+// F6: the Slack cut note names the saved brief in stored mode, and asks for --out in stateless
+// mode, where no file exists unless --out was given.
+const MANY = 1500;
+function slackBody(fetch) {
+  const post = fetch.calls.find((c) => c.url.startsWith('https://hooks.slack.com/'));
+  return post.body.text;
+}
+test('a brief cut for Slack names the saved file in stored mode, and asks for --out in stateless mode', async () => {
+  const hook = 'https://hooks.slack.com/services/T000/B000/XXXX';
+  const deals = Array.from({ length: MANY }, (_, i) => ({ id: String(9000 + i), properties: { dealname: `Deal ${i}`, pipeline: 'default', dealstage: 'appointmentscheduled', amount: '1000', closedate: '2026-12-01', hubspot_owner_id: String(i), hs_next_step: '', notes_last_updated: '2026-10-04', createdate: '2026-09-01' } }));
+  const routes = happyRoutes();
+  routes['/crm/v3/objects/deals'] = [() => respond(200, { results: deals })];
+  routes['/services/T000/B000/XXXX'] = [() => new Response('ok')];
+  const dir = tmp();
+  const stored = await run(['run', '--dir', dir, '--group-by', 'owner'], { env: { HUBSPOT_TOKEN: TOKEN, SLACK_WEBHOOK_URL: hook }, fetch: fakeFetch(routes) });
+  assert.equal(stored.code, 0, stored.err);
+  assert.ok(slackBody(stored.fetch).endsWith('_Brief cut short for Slack. The full brief is saved as brief-2026-10-05.md on the machine that ran it._'));
+  assert.ok(!slackBody(stored.fetch).includes(dir), 'no local path in Slack');
+
+  const ver = (value) => [{ value, timestamp: '2026-09-01T00:00:00.000Z', sourceType: 'CRM_UI' }];
+  const history = deals.map((d) => ({ ...d, createdAt: '2026-09-01T00:00:00.000Z', archived: false, propertiesWithHistory: Object.fromEntries(Object.entries(d.properties).map(([k, v]) => [k, ver(v)])) }));
+  const sroutes = statelessRoutes();
+  sroutes['/crm/v3/objects/deals'] = [() => respond(200, { results: history })];
+  sroutes['/services/T000/B000/XXXX'] = [() => new Response('ok')];
+  const sl = await stateless(['run', '--since', '7d', '--group-by', 'owner'], { routes: sroutes, env: { SLACK_WEBHOOK_URL: hook } });
+  assert.equal(sl.code, 0, sl.err);
+  assert.ok(slackBody(sl.fetch).endsWith('_Brief cut short for Slack. Run with --out FILE for the full brief._'), slackBody(sl.fetch).slice(-200));
+  const out = join(tmp(), 'b.md');
+  const sroutes2 = { ...sroutes, '/crm/v3/objects/deals': [() => respond(200, { results: history })], '/services/T000/B000/XXXX': [() => new Response('ok')] };
+  const saved = await stateless(['run', '--since', '7d', '--group-by', 'owner', '--out', out], { routes: sroutes2, env: { SLACK_WEBHOOK_URL: hook } });
+  assert.equal(saved.code, 0, saved.err);
+  assert.ok(slackBody(saved.fetch).endsWith('_Brief cut short for Slack. The full brief is saved as b.md on the machine that ran it._'));
+});
+
+test('stateless: a pipeline whose change log starts after the comparison date is read from its oldest entry, and the brief says so', async () => {
+  const p = fixture('pipelines.json').results.find((x) => x.id === 'default');
+  const raw = JSON.stringify({ pipelineId: p.id, label: p.label, stages: p.stages.map((st) => ({ stageId: st.id, label: st.label, displayOrder: st.displayOrder, metadata: st.metadata })) });
+  const routes = statelessRoutes();
+  routes['/crm/v3/pipelines/deals/default/audit'] = [() => respond(200, { results: [{ action: 'UPDATE', timestamp: '2026-10-01T00:00:00.000Z', rawObject: raw }] })];
+  const r = await stateless(['run', '--since', '7d'], { routes });
+  assert.equal(r.code, 0, r.err);
+  assert.match(r.out, new RegExp(`^${p.label}: its change log in HubSpot starts after Sep 28, so its stages on Sep 28 are read from the oldest settings HubSpot kept for it\\.$`, 'm'));
+  assert.doesNotMatch(r.out, /Could not rebuild/);
+});
+
+// The stateless stderr line names the same comparison date the brief does (the local date of the
+// instant), with the exact instant in UTC after it.
+test('the stateless stderr line and the brief agree on the comparison date', async () => {
+  const r = await stateless(['run', '--since', '7d']);
+  assert.equal(r.code, 0, r.err);
+  const instant = new Date(NOW.getTime() - 7 * 86400000);
+  assert.match(r.out, /as of Sep 28, rebuilt/);
+  assert.ok(r.err.includes(`compared with HubSpot as of 2026-09-28, local time (${instant.toISOString()} in UTC)`), r.err);
 });

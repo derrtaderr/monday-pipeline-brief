@@ -145,7 +145,7 @@ test('statelessRead batch reads only the deals archived after T, 50 per call, th
   const c = fakeClient({ archivedList });
   const read = await statelessRead(c, T0);
   assert.deepEqual(c.calls, ['rates', 'live', 'archived-list', 'batch:50', 'batch:50', 'batch:20', 'pipelines', 'audit:default', 'owners']);
-  assert.equal(read.archivedListed, 130);
+  assert.deepEqual(Object.keys(read).sort(), ['archived', 'audits', 'live', 'owners', 'pipelines'], 'only what buildStateless reads');
   assert.ok(read.audits instanceof Map);
 });
 
@@ -277,17 +277,42 @@ test('buildStateless: a deal whose stage at T is in a since-deleted pipeline cou
   const text = renderBrief(r);
   assert.match(text, /Closed 0 won and 0 lost\./);
   assert.match(text, /flat on last week \(the Oct 2 total leaves out 1 deal whose state then could not be rebuilt\)/);
-  assert.match(text, /Deal 2\][^\n]*: its stage on Oct 2 is not in the pipeline settings HubSpot kept for that date[^\n]*, so its state then is unknown/);
+  assert.match(text, /Deal 2\][^\n]*: its pipeline on Oct 2 has since been deleted, so its stage and state then are unknown/);
 });
 
-test('buildStateless: a pipeline whose audit starts after T sends every deal in it to could-not-rebuild', () => {
-  const late = new Map([['default', [{ action: 'UPDATE', timestamp: after(5), rawObject: JSON.stringify({ pipelineId: 'default', label: 'Sales', stages: [] }) }]]]);
+// m1: the layout line names the cause it can see.
+test('buildStateless: a deal whose stage at T was deleted from a pipeline that still exists says the stage was deleted', () => {
+  const out = buildAt([rec('4', { history: { dealstage: [v('b', after(10)), v('gone', BEFORE)] } })]);
+  assert.deepEqual(out.unknown.map((u) => [u.id, u.reason, u.cause]), [['4', 'layout', 'stage']]);
+  const text = renderBrief(compareStateless(out.previous, out.current, out.unknown, out.current.date));
+  assert.match(text, /Deal 4\][^\n]*: its stage on Oct 2 is not in the settings HubSpot kept for that pipeline on that date \(a deleted stage\), so its state then is unknown/);
+});
+
+// m1: a pipeline that had deals at T but whose change log starts after T takes its stages then
+// from the oldest settings HubSpot kept, and the brief says so.
+test('buildStateless: a pipeline whose audit starts after T, with deals in it at T, uses its oldest audit entry and says so', () => {
+  const oldest = JSON.stringify({ pipelineId: 'default', label: 'Sales', stages: [
+    { stageId: 'a', label: 'Intro', displayOrder: 0, metadata: { isClosed: 'false', probability: '0.2' } },
+    { stageId: 'b', label: 'Pitch', displayOrder: 1, metadata: { isClosed: 'false', probability: '0.6' } },
+  ] });
+  const late = new Map([['default', [
+    { action: 'UPDATE', timestamp: after(50), rawObject: JSON.stringify({ pipelineId: 'default', label: 'Sales', stages: [] }) },
+    { action: 'UPDATE', timestamp: after(5), rawObject: oldest },
+  ]]]);
   const out = buildAt([rec('1'), rec('3', { history: { dealstage: [v('b', BEFORE)] } })], late);
-  assert.deepEqual(out.previous.deals, []);
-  assert.deepEqual(out.unknown.map((u) => [u.id, u.reason]).sort(), [['1', 'layout'], ['3', 'layout']]);
-  const r = compareStateless(out.previous, out.current, out.unknown, out.current.date);
-  assert.equal(r.bridge.start, 0);
-  assert.equal(r.startBreakdown.unknownCount, 2);
+  assert.deepEqual(out.previous.deals.map((x) => [x.id, x.stage]).sort(), [['1', 'Intro'], ['3', 'Pitch']]);
+  assert.deepEqual(out.unknown, []);
+  assert.deepEqual(out.layoutNotes.map((n) => n.label), ['Sales']);
+  const r = compareStateless(out.previous, out.current, out.unknown, out.current.date, { layoutNotes: out.layoutNotes });
+  assert.equal(r.bridge.start, cents(200));
+  assert.match(renderBrief(r), /^Sales: its change log in HubSpot starts after Oct 2, so its stages on Oct 2 are read from the oldest settings HubSpot kept for it\.$/m);
+});
+
+test('buildStateless: a pipeline whose audit starts after T, with no deal in it at T, did not exist yet', () => {
+  const late = new Map([['default', [{ action: 'CREATE', timestamp: after(5), rawObject: JSON.stringify({ pipelineId: 'default', label: 'Sales', stages: [] }) }]]]);
+  const out = buildAt([rec('2', { history: { createdate: [v(after(20), after(20))], dealstage: [v('a', after(20))] } })], late);
+  assert.deepEqual(out.previous.pipelines, []);
+  assert.deepEqual(out.layoutNotes, []);
 });
 
 test('buildStateless: a partly rebuilt deal whose stage at T is not in the layout is not partial: its status then is unknown', () => {
@@ -322,4 +347,58 @@ test('renderBrief: a deal listed under both Removed from HubSpot and Could not r
   const current = { date: '2026-10-09', pipelines: [], deals: [] };
   const text = renderBrief(compareStateless(previous, current, [{ id: 'G', reason: 'capped', fields: ['close_date'], atT: atT('G', 70) }], '2026-10-09'));
   assert.match(text, /- Deal G, \$70, o: more than 20 changes to its close date since Oct 2; open then at \$70, gone from HubSpot now \(also under Removed from HubSpot\)$/m);
+});
+
+// F1 in stateless mode: the won or lost status and the amount at T come from history.
+const WITH_LOST = [{ ...PIPELINES[0], stages: [...PIPELINES[0].stages, { id: 'lost', label: 'Lost', displayOrder: 3, metadata: { isClosed: 'true', probability: '0.0' } }] }];
+test('stateless: a deal won at T and lost now is Changed after closing, rebuilt from history; the bridge is unchanged', () => {
+  const live = [
+    rec('9', { history: { dealstage: [v('lost', after(50)), v('won', BEFORE)], amount: [v('250000', BEFORE)] } }),
+    rec('1'),
+  ];
+  const b = buildStateless({ live, archived: [], pipelines: WITH_LOST, audits: new Map(), owners: OWNERS, T: T0, now: NOW0, previousDate: '2026-10-02', date: '2026-10-09' });
+  const r = compareStateless(b.previous, b.current, b.unknown, '2026-10-09');
+  assert.deepEqual(r.changedAfterClose.map((c) => [c.deal.id, c.fromStatus, c.deal.status]), [['9', 'won', 'lost']]);
+  assert.deepEqual(r.won, []);
+  assert.deepEqual(r.lost, []);
+  assert.equal(r.bridge.start, r.bridge.end);
+  const out = renderBrief(r);
+  assert.match(out, /Closed 0 won and 0 lost\. 1 deal changed after closing\.\n/);
+  assert.match(out.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'), /- Deal 9, \$250K, Dana Reyes: was won, now lost\n/);
+});
+
+test('stateless: a deal closed at T whose amount then is unknown reports a flip without amounts, and no amount change on its own', () => {
+  const previous = { date: '2026-10-02', pipelines: [], deals: [] };
+  const current = { date: '2026-10-09', pipelines: [], deals: [d('F', 80, 'lost'), d('S', 90, 'won')] };
+  const unknown = [
+    { id: 'F', reason: 'capped', fields: ['amount'], atT: atT('F', 0, 'won') },
+    { id: 'S', reason: 'capped', fields: ['amount'], atT: atT('S', 0, 'won') },
+  ];
+  const r = compareStateless(previous, current, unknown, '2026-10-09');
+  assert.deepEqual(r.changedAfterClose.map((c) => [c.deal.id, c.fromStatus, c.deal.status, c.amountMoved]), [['F', 'won', 'lost', false]]);
+  assert.match(renderBrief(r), /- Deal F, \$80, o: was won, now lost\n/);
+  assert.equal(bridgeWalk(r.bridge), r.bridge.end);
+});
+
+// m3: a deal whose state then is unknown but that is closed today says which way it closed.
+test('renderBrief: a could-not-rebuild deal that is closed today says won now or lost now', () => {
+  const previous = { date: '2026-10-02', pipelines: [], deals: [] };
+  const current = { date: '2026-10-09', pipelines: [], deals: [d('M', 500, 'won'), d('C', 300, 'lost'), d('O', 200)] };
+  const r = compareStateless(previous, current, [
+    { id: 'M', reason: 'merged', fields: UNKNOWN_FIELDS, sources: ['1', '2'] },
+    { id: 'C', reason: 'capped', fields: ['stage_id', 'status', 'stage_order'] },
+    { id: 'O', reason: 'capped', fields: ['stage_id', 'status', 'stage_order'] },
+  ], '2026-10-09');
+  const out = renderBrief(r);
+  assert.match(out, /- Deal M, \$500, o: merged since Oct 2 from records 1 and 2, so what they held then is unknown; won now\n/);
+  assert.match(out, /- Deal C, \$300, o: more than 20 changes to its stage since Oct 2, so its state then is unknown; lost now\n/);
+  assert.match(out, /- Deal O, \$200, o: more than 20 changes to its stage since Oct 2, so its state then is unknown\n/);
+});
+
+test('renderBrief: a deal with no stage in its history then says so under Could not rebuild, never New', () => {
+  const previous = { date: '2026-10-02', pipelines: [], deals: [] };
+  const current = { date: '2026-10-09', pipelines: [], deals: [d('N', 400)] };
+  const r = compareStateless(previous, current, [{ id: 'N', reason: 'no-stage', fields: ['stage_id', 'status', 'stage_order'], atT: atT('N', 300) }], '2026-10-09');
+  assert.deepEqual(r.newDeals, []);
+  assert.match(renderBrief(r), /- Deal N, \$400, o: HubSpot's history holds no stage for it on Oct 2, so its state then is unknown \(amount then \$300\)\n/);
 });

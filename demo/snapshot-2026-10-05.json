@@ -521,6 +521,22 @@
       "next_step": "Kickoff",
       "last_activity": "2026-10-03",
       "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D127"
+    },
+    {
+      "id": "D128",
+      "name": "Ironbridge Logistics",
+      "owner": "Marcus",
+      "pipeline_id": "default",
+      "pipeline": "Sales Pipeline",
+      "stage_id": "closedlost",
+      "stage": "Closed lost",
+      "stage_order": 6,
+      "status": "lost",
+      "amount": 45000,
+      "close_date": "2026-09-24",
+      "next_step": "",
+      "last_activity": "2026-10-03",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D128"
     }
   ]
 }

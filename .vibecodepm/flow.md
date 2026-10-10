@@ -12,7 +12,7 @@ not necessarily a developer.
 ## Entry points
 
 1. **README on GitHub** (from a launch post). Reads the problem, sees the sample brief.
-2. **`node bin/monday-brief.mjs demo`** from a clone, or `npx github:derrtaderr/monday-pipeline-brief demo`. No token.
+2. **`node bin/monday-brief.mjs demo`** from a clone, or `npx github:derrtaderr/monday-pipeline-brief#v0.3.1 demo`. No token.
 3. **`run --since 7d`** (stateless) with `HUBSPOT_TOKEN` set, by hand the first time, then from a GitHub Action weekly; or **`run`** (stored snapshots), by hand the first time, then from cron or launchd weekly.
 4. **`help`**, `--help` after any command, or no arguments: prints usage, exit 0.
 
@@ -40,8 +40,8 @@ not necessarily a developer.
 | Bad --since, --as-of, both, or --dir with either | Usage error naming the flag, plus usage | 1 | none |
 | HubSpot failure during the read | The HubSpot message, then "No brief was written." | 2 | none |
 | A batch read of archived deals comes back partial (207 with errors, or fewer records) | "HubSpot's batch read of archived deals returned N of M deals... A partial read is never used; try again later." "No brief was written." | 2 | none |
-| stdout is not a terminal, no `--out`, no Slack | Brief on stdout, then "The brief went to standard output only: it was not saved or posted anywhere. Add --out FILE or set SLACK_WEBHOOK_URL to keep it." | 0 | none |
-| Slack post fails, no `--out` | "Slack post failed (...). The brief was printed above." in a terminal; elsewhere "The brief went to standard output only and was not saved; add --out FILE to keep a copy." | 3 | none |
+| stdout is not a terminal, no `--out`, no Slack | Brief on stdout, then "This run kept no copy of the brief of its own (no --out, no SLACK_WEBHOOK_URL). Unless standard output went to a file, add --out FILE or set SLACK_WEBHOOK_URL to keep it." (true for a pipe, a file redirect or /dev/null) | 0 | none |
+| Slack post fails, no `--out` | "Slack post failed (...). The brief was printed above." in a terminal; elsewhere "This run kept no copy of the brief of its own; unless standard output went to a file, add --out FILE to keep one." | 3 | none |
 | `--dir` while `MONDAY_BRIEF_SINCE` is set | "--dir is for stored snapshots, but MONDAY_BRIEF_SINCE turns on stateless mode... Unset MONDAY_BRIEF_SINCE to use --dir." plus usage | 1 | none |
 
 ## States
@@ -56,15 +56,19 @@ not necessarily a developer.
 | Normal weekly run | Full brief | 0 | snapshot, brief, run.log line |
 | Nothing changed | Headline "flat on last week", no bridge (every line would be zero), "Nothing flagged this week." | 0 | snapshot, brief, run.log line |
 | Grouped run (`--group-by owner` or `pipeline`) | Headline and bridge for the whole pipeline, then "## <rep or pipeline>, open $X across N deals" headings in order of open total, each with its sections (10 per section per group) or "Nothing flagged." | 0 | snapshot, brief, run.log line |
+| Two owners with the same name | Each is told apart on every line and heading: "Dana Ruiz (dana@example.com)", or "Dana Ruiz (owner 102)" when the email does not tell them apart; `--group-by owner` gives each its own heading (grouped by owner id) | 0 | as for the mode |
+| Brief too long for Slack | Slack copy re-rendered with 5, then 3, then 1 rows per section, ending "_Each section shows its N largest deals here to fit Slack. ..._"; only if one row each does not fit, cut at a line with "_Brief cut short for Slack. ..._". Either note gives the saved brief's file name "on the machine that ran it", or "Run with --out FILE for the full brief." | 0 | as for the mode |
+| Pipeline change log starts after the comparison date (stateless), with deals in it then | Its stages then are read from the oldest settings HubSpot kept; one line under "Compared with HubSpot as of ...": "<pipeline>: its change log in HubSpot starts after <date>, so its stages on <date> are read from the oldest settings HubSpot kept for it." | 0 | none (stdout, --out, Slack) |
 | Pipeline reordered in HubSpot settings | No deal is listed as moved unless its stage changed | 0 | snapshot, brief, run.log line |
 | A deal left a stage that has since been deleted | Listed under "Changed stage", old stage to new, with no back or forward | 0 | snapshot, brief, run.log line |
 | Deal deleted or archived since last week | Listed under "Removed from HubSpot" and as a bridge line | 0 | snapshot, brief, run.log line |
+| Deal closed at both ends, but flipped (won to lost, lost to won) or its amount moved | Listed under "Changed after closing" ("was won, now lost", "won amount $X → $Y"); the headline adds "N deals changed after closing."; not in the Closed counts and not a bridge line (never open) | 0 | as for the mode |
 | Baseline written by v0.1 (no deal links) | Loads as before; deals that exist only in that snapshot (removed deals) show a plain name | 0 | snapshot, brief, run.log line |
 | `--large-deal` or `MONDAY_BRIEF_LARGE_DEAL` not an amount | "--large-deal needs an amount in dollars such as 50000, 50K or 1.5M, or off (got "...")" plus usage. Nothing fetched | 1 | none |
 | `--group-by` or `MONDAY_BRIEF_GROUP_BY` not owner or pipeline | "--group-by must be owner or pipeline (got "...")" plus usage. Nothing fetched | 1 | none |
 | Same-day re-run | Today's snapshot overwritten; still compares with the same earlier baseline | 0 | snapshot (overwritten), brief (overwritten), run.log line |
-| Ad-hoc mid-week run, then the scheduled run | The scheduled brief compares with the newest snapshot at least 6 days old, not the mid-week one; with none that old, the newest earlier one | 0 | snapshot, brief, run.log line |
-| Skipped week(s) (machine asleep or off, job missed) | Compares with the newest snapshot at least 6 days old. A gap of 6 to 8 days reads "last week"; any other gap reads "Compared with the snapshot from Sep 21, 2 weeks ago.", "up $39K since Sep 21", "New since Sep 21", "Nothing flagged since Sep 21.", and the heading drops "week of" | 0 | snapshot, brief, run.log line |
+| Ad-hoc mid-week run, then the scheduled run | The scheduled brief compares with the newest snapshot 7 or 8 days old, not the mid-week one (a Tuesday run is 6 days old by Monday); with none that age, the newest at least 6 days old; with none that old, the newest earlier one | 0 | snapshot, brief, run.log line |
+| Skipped week(s) (machine asleep or off, job missed) | Compares with the newest snapshot 7 or 8 days old, else the newest at least 6 days old. A gap of 6 to 8 days reads "last week"; any other gap reads "Compared with the snapshot from Sep 21, 2 weeks ago.", "up $39K since Sep 21", "New since Sep 21", "Nothing flagged since Sep 21.", and the heading drops "week of" | 0 | snapshot, brief, run.log line |
 | Missing token | "HUBSPOT_TOKEN is not set. Create a HubSpot service key (or a private app on older accounts) as the README quickstart shows..." and a pointer to `demo` | 1 | run.log line only |
 | Malformed token (smart quotes, spaces, non-ASCII) | "HUBSPOT_TOKEN has characters a HubSpot token never has (smart quotes, spaces or non-ASCII letters...)" "Nothing was fetched from HubSpot." Immediate, no retries, token never printed | 1 | run.log line only |
 | SLACK_WEBHOOK_URL is a placeholder or not a Slack webhook URL | "SLACK_WEBHOOK_URL is not a Slack incoming webhook URL (it should start with https://hooks.slack.com/ ...). Paste the webhook URL Slack gave you, or remove the line to skip Slack." "Nothing was fetched from HubSpot." The URL is never printed | 1 | run.log line only |
@@ -80,7 +84,7 @@ not necessarily a developer.
 | Snapshot write fails after HubSpot was read (disk full) | "Could not save today's snapshot in <dir> (<code>). No snapshot or brief was written." | 4 | run.log line, if the folder still takes one |
 | Brief write fails after the snapshot was saved | Brief on stdout, then "Could not write the brief to <file> (<code>). Today's snapshot was saved as snapshot-DATE.json in <dir>..." | 4 | snapshot, run.log line |
 | run.log cannot be written | "Warning: could not add a line to <dir>/run.log (<code>)." Exit code unchanged | unchanged | everything else as normal |
-| Deals in unreadable stages | Brief line and stderr "Warning: N deals ($X) are in stages we couldn't read (archived or deleted in HubSpot), counted as open." | 0 | snapshot, brief, run.log line |
+| Deals in unreadable stages | Brief line "N deals ($X) are in stages we couldn't read (archived or deleted in HubSpot), counted as open." and stderr "Warning: N deals are in stages we couldn't read (archived or deleted in HubSpot), counted as open." (counts only on stderr) | 0 | snapshot, brief, run.log line |
 | Team does not use Next step | Run with `--no-next-step` or `MONDAY_BRIEF_NEXT_STEP=off`; section becomes "No activity in 14+ days" | 0 | snapshot, brief, run.log line |
 | Huge pipeline | Each section shows the 10 largest then "and N more ($X)"; Slack text kept under 35,000 characters | 0 | snapshot, brief, run.log line |
 | Scheduled run did not happen | `tail ~/.monday-pipeline-brief/run.log` shows no new line; README points to a missing or misnamed `~/.monday-brief.env` (the shell stops before the tool starts; `ls -l ~/.monday-brief.env`), `which node`, macOS privacy controls (TCC) on ~/Documents, ~/Desktop, ~/Downloads, cron mail, `launchctl list`, `/tmp/monday-brief.launchd.log` (status messages only; launchd stdout goes to /dev/null) | n/a | n/a |

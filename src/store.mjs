@@ -1,6 +1,7 @@
 // Snapshot files on the user's own disk: <dir>/snapshot-YYYY-MM-DD.json
 
-import { mkdirSync, readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readdirSync, readFileSync, existsSync } from 'node:fs';
+import { writePrivate } from './files.mjs';
 import { join } from 'node:path';
 import { SCHEMA } from './snapshot.mjs';
 import { daysBetween } from './format.mjs';
@@ -8,9 +9,8 @@ import { daysBetween } from './format.mjs';
 const NAME = /^snapshot-(\d{4}-\d{2}-\d{2})\.json$/;
 
 export function writeSnapshot(dir, snapshot) {
-  mkdirSync(dir, { recursive: true, mode: 0o700 });
   const file = join(dir, `snapshot-${snapshot.date}.json`);
-  writeFileSync(file, `${JSON.stringify(snapshot, null, 2)}\n`, { mode: 0o600 });
+  writePrivate(file, `${JSON.stringify(snapshot, null, 2)}\n`);
   return file;
 }
 
@@ -36,12 +36,15 @@ function readSnapshot(file) {
   return data;
 }
 
-// A snapshot at least this many days old counts as last week's baseline.
+// The weekly baseline: a snapshot WEEK_DAYS old is preferred (the window the brief calls "last
+// week"); else one at least BASELINE_DAYS old.
+export const WEEK_DAYS = [7, 8];
 export const BASELINE_DAYS = 6;
 
-// The previous snapshot: the newest readable one at least BASELINE_DAYS old, so an ad-hoc
-// mid-week run never displaces the weekly baseline; failing that, the newest readable earlier
-// one. Unreadable files that were tried are skipped and reported.
+// The previous snapshot: the newest readable one 7 or 8 days old, so a run by hand on Tuesday
+// (6 days old by next Monday) never displaces last Monday's; else the newest readable one at
+// least BASELINE_DAYS old, so a late run last week still beats one from two weeks ago; failing
+// that, the newest readable earlier one. Unreadable files that were tried are skipped and reported.
 export function findPrevious(dir, date) {
   const skipped = [];
   if (!existsSync(dir)) return { snapshot: null, skipped };
@@ -50,9 +53,11 @@ export function findPrevious(dir, date) {
     .filter((d) => d && d < date)
     .sort()
     .reverse();
-  const old = dates.filter((d) => daysBetween(d, date) >= BASELINE_DAYS);
-  const recent = dates.filter((d) => daysBetween(d, date) < BASELINE_DAYS);
-  for (const d of [...old, ...recent]) {
+  const age = (d) => daysBetween(d, date);
+  const week = dates.filter((d) => age(d) >= WEEK_DAYS[0] && age(d) <= WEEK_DAYS[1]);
+  const old = dates.filter((d) => age(d) >= BASELINE_DAYS && !week.includes(d));
+  const recent = dates.filter((d) => age(d) < BASELINE_DAYS);
+  for (const d of [...week, ...old, ...recent]) {
     const file = `snapshot-${d}.json`;
     try {
       const snapshot = readSnapshot(join(dir, file));

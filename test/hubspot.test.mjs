@@ -37,7 +37,7 @@ test('listDeals asks for 100 per page and exactly the properties the brief uses'
   assert.equal(u.origin, 'https://api.hubapi.com');
   assert.equal(u.searchParams.get('limit'), '100');
   assert.deepEqual(u.searchParams.get('properties').split(',').sort(), [
-    'amount', 'amount_in_home_currency', 'closedate', 'createdate', 'dealname', 'dealstage', 'hs_next_step', 'hubspot_owner_id', 'notes_last_updated', 'pipeline',
+    'amount', 'amount_in_home_currency', 'closedate', 'createdate', 'deal_currency_code', 'dealname', 'dealstage', 'hs_next_step', 'hubspot_owner_id', 'notes_last_updated', 'pipeline',
   ]);
 });
 
@@ -201,7 +201,7 @@ test('listDealsWithHistory asks for 50 per page with full history and follows ev
   const u = new URL(fetch.calls[0].url);
   assert.equal(u.searchParams.get('limit'), '50');
   assert.deepEqual(u.searchParams.get('propertiesWithHistory').split(',').sort(), [
-    'amount', 'amount_in_home_currency', 'closedate', 'createdate', 'dealname', 'dealstage', 'hs_next_step', 'hubspot_owner_id', 'notes_last_updated', 'pipeline',
+    'amount', 'amount_in_home_currency', 'closedate', 'createdate', 'deal_currency_code', 'dealname', 'dealstage', 'hs_next_step', 'hubspot_owner_id', 'notes_last_updated', 'pipeline',
   ]);
   assert.ok(u.searchParams.get('properties').split(',').includes('hs_merged_object_ids'));
   assert.equal(u.searchParams.has('archived'), false);

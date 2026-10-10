@@ -1,12 +1,11 @@
 // Compare two snapshots and return the structured facts the brief is written from.
 
-import { daysBetween } from './format.mjs';
-import { buildBridge } from './bridge.mjs';
+import { daysBetween, sumAmounts as sum } from './format.mjs';
+import { buildBridge, cents, amountNote, EXCHANGE_RATE } from './bridge.mjs';
 
 export const STALE_DAYS = 14;
 
 const byAmount = (get = (x) => x) => (a, b) => get(b).amount - get(a).amount;
-const sum = (deals) => deals.reduce((n, d) => n + d.amount, 0);
 
 // With no logged activity, the deal's age stands in: a deal created under STALE_DAYS ago has
 // not had time to go quiet. With no creation date either, it is flagged as before.
@@ -56,7 +55,7 @@ export const FLAG_TEXT = {
   back: 'moved back a stage',
   overdue: 'close date passed',
   'no-next-step': 'no next step',
-  'no-activity': 'no activity in 14+ days',
+  'no-activity': `no activity in ${STALE_DAYS}+ days`,
 };
 
 // Large deals by default: the largest open deals, never more than LARGE_SHARE of them and at
@@ -122,7 +121,7 @@ export function compare(previous, current, today, { nextStep = true, largeDeal }
     openDeals: open,
     previousOpenTotal: previous ? sum(previous.deals.filter((d) => d.status === 'open')) : null,
     won: [], lost: [], slipped: [], back: [], forward: [], changedStage: [], transferred: [], newDeals: [], lookFirst: [],
-    bridge: null, amountChanged: [], removed: [], reopened: [], closedMoves: new Map(),
+    bridge: null, amountChanged: [], removed: [], reopened: [], closedMoves: new Map(), changedAfterClose: [],
     stale,
     overdue: open
       .filter((d) => d.close_date && d.close_date < current.date)
@@ -146,6 +145,18 @@ export function compare(previous, current, today, { nextStep = true, largeDeal }
     if (p && p.status === 'open' && d.status !== 'open' && d.pipeline_id !== p.pipeline_id) {
       result.closedMoves.set(d.id, { fromPipeline: p.pipeline ?? p.pipeline_id, fromPipelineId: p.pipeline_id });
     }
+    // Closed at both ends: never in the open pipeline (so not in the bridge, nor in Won or Lost),
+    // but a flip between won and lost, or a closed amount that moved, is listed on its own.
+    if (p && p.status !== 'open' && d.status !== 'open') {
+      const amountMoved = !p.amount_unknown && cents(p.amount) !== cents(d.amount);
+      const note = amountMoved ? amountNote(p, d) : null;
+      // A closed deal whose home amount moved only with the exchange rate did not change: on a
+      // multi-currency portal every old foreign-currency deal would be listed every week.
+      const fxOnly = p.status === d.status && note === EXCHANGE_RATE;
+      if ((p.status !== d.status || amountMoved) && !fxOnly) {
+        result.changedAfterClose.push({ deal: d, fromStatus: p.status, fromAmount: p.amount_unknown ? null : p.amount, amountMoved, note });
+      }
+    }
     if (!p || d.status !== 'open' || p.status !== 'open') continue;
     if (d.close_date && p.close_date && d.close_date > p.close_date) {
       const to = quarter(d.close_date);
@@ -161,7 +172,7 @@ export function compare(previous, current, today, { nextStep = true, largeDeal }
     else if (move > 0) result.forward.push({ deal: d, from: p.stage });
   }
   for (const key of ['won', 'lost', 'newDeals', 'removed']) result[key].sort(byAmount());
-  for (const key of ['slipped', 'back', 'forward', 'changedStage', 'transferred', 'amountChanged', 'reopened']) result[key].sort(byAmount((r) => r.deal));
+  for (const key of ['slipped', 'back', 'forward', 'changedStage', 'transferred', 'amountChanged', 'reopened', 'changedAfterClose']) result[key].sort(byAmount((r) => r.deal));
 
   const flags = new Map();
   const flag = (deal, text) => {

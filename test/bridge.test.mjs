@@ -92,7 +92,7 @@ test('a first run has no bridge', () => {
 test('an unbalanced bridge is an error, never a number (duplicate ids are the one way in)', () => {
   const prev = snap('2026-09-28', [deal({ id: 'dup', amount: 10 })]);
   const curr = snap(TODAY, [deal({ id: 'dup', amount: 10 }), deal({ id: 'dup', amount: 20 })]);
-  assert.throws(() => compare(prev, curr, TODAY), /bridge does not balance/);
+  assert.throws(() => compare(prev, curr, TODAY), (err) => /does not add up/.test(err.message) && !/\d/.test(err.message));
 });
 
 // Read the rendered bridge back as numbers: the start, each signed line, the end.
@@ -118,4 +118,12 @@ test('the printed bridge adds up on every generated pair that has one', () => {
     assert.equal(start + steps.reduce((a, b) => a + b, 0), end, `seed ${seed}: printed bridge does not add up\n${out}`);
   }
   assert.ok(printed > 400, `only ${printed} pairs printed a bridge`);
+});
+
+// The balance check's message reaches stderr ("Unexpected error: ...") and run.log, which can be
+// a log others read, so it carries no figures.
+test('a bridge that does not balance fails with a message that holds no amount', async () => {
+  const { assertBalanced } = await import('../src/bridge.mjs');
+  assert.doesNotThrow(() => assertBalanced(12345, 12345));
+  assert.throws(() => assertBalanced(12345, 67890), (err) => /does not add up/.test(err.message) && !/\d/.test(err.message));
 });

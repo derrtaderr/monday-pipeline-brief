@@ -115,3 +115,20 @@ test('a snapshot that lists a deal id twice loads it once, so the bridge can bal
   const { snapshot } = findPrevious(dir, '2026-10-05');
   assert.deepEqual(snapshot.deals.map((d) => [d.id, d.amount]), [['1', 5], ['2', 1]]);
 });
+
+// F5: a run by hand on Tuesday is 6 days old by next Monday; last Monday's run, 7 days old, is
+// still the weekly baseline.
+test('a Tuesday run by hand does not become next Monday\'s baseline: a snapshot 7 or 8 days old wins', () => {
+  const dir = tmp();
+  for (const d of ['2026-09-28', '2026-09-29']) writeSnapshot(dir, snap(d)); // Monday cron, then Tuesday by hand
+  assert.equal(findPrevious(dir, '2026-10-05').snapshot.date, '2026-09-28');
+  const late = tmp();
+  for (const d of ['2026-09-27', '2026-09-29']) writeSnapshot(late, snap(d));
+  assert.equal(findPrevious(late, '2026-10-05').snapshot.date, '2026-09-27');
+});
+
+test('with nothing 7 or 8 days old, the newest at least 6 days old is used, not one two weeks old', () => {
+  const dir = tmp();
+  for (const d of ['2026-09-21', '2026-09-29']) writeSnapshot(dir, snap(d)); // last week's run a day late
+  assert.equal(findPrevious(dir, '2026-10-05').snapshot.date, '2026-09-29');
+});

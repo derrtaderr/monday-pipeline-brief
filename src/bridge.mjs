@@ -3,8 +3,35 @@
 
 export const cents = (amount) => Math.round((Number(amount) || 0) * 100);
 const isOpen = (d) => d.status === 'open';
+
+// The home-currency amount moved while the deal's own amount and currency did not: the exchange
+// rate moved, not the deal. Unknown (false) when either snapshot lacks them.
+export function exchangeRateOnly(p, d) {
+  return Boolean(p.deal_currency) && p.deal_currency === d.deal_currency
+    && p.deal_currency_amount != null && d.deal_currency_amount != null
+    && cents(p.deal_currency_amount) === cents(d.deal_currency_amount);
+}
+
+// What an amount change can be told to be, for its line: 'exchange rate' (above), or 'currency
+// unknown last week' when last week's snapshot predates the currency fields and the deal is in
+// a foreign currency today (its own amount differs from its home amount), so an exchange-rate
+// move cannot be ruled out. Null otherwise: a real change.
+export const EXCHANGE_RATE = 'exchange rate';
+export const CURRENCY_UNKNOWN = 'currency unknown last week';
+export function amountNote(p, d) {
+  if (exchangeRateOnly(p, d)) return EXCHANGE_RATE;
+  if (p.deal_currency_amount === undefined && d.deal_currency && d.deal_currency_amount != null
+    && cents(d.deal_currency_amount) !== cents(d.amount)) return CURRENCY_UNKNOWN;
+  return null;
+}
 const line = () => ({ cents: 0, count: 0 });
 const add = (l, c) => { l.cents += c; l.count += 1; };
+
+// The bridge walked from the start must land on the open total. The message holds no figures:
+// it reaches stderr and run.log, which can end up in a log other people read.
+export function assertBalanced(walked, end) {
+  if (walked !== end) throw new Error('the dollar bridge does not add up to the open total, so no brief was written. This is a bug; please report it in GitHub Issues');
+}
 
 // Per deal (see docs/SPEC-v0.2.md for the table):
 //   open -> open           amount change
@@ -42,7 +69,7 @@ export function buildBridge(previous, current) {
     const change = now - cents(p.amount);
     if (change > 0) add(b.increases, change);
     if (change < 0) add(b.decreases, -change);
-    if (change) amountChanged.push({ deal: d, from: p.amount, to: d.amount });
+    if (change) amountChanged.push({ deal: d, from: p.amount, to: d.amount, note: amountNote(p, d) });
     if (!isOpen(d)) add(b[d.status], now);
   }
   for (const p of previous.deals) {
@@ -51,6 +78,6 @@ export function buildBridge(previous, current) {
 
   const walked = b.start + b.new.cents + b.reopened.cents + b.increases.cents - b.decreases.cents
     - b.won.cents - b.lost.cents - b.removed.cents;
-  if (walked !== b.end) throw new Error(`bridge does not balance: walked to ${walked} cents, open total is ${b.end}`);
+  assertBalanced(walked, b.end);
   return { bridge: b, amountChanged, removed, reopened };
 }

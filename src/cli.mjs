@@ -1,7 +1,8 @@
 // Command-line entry. Everything the outside world provides (env, fetch, clock, streams) is
 // injected, so the whole CLI runs under test with no network and no real token.
 
-import { readFileSync, writeFileSync, mkdirSync, appendFileSync, accessSync, statSync, constants } from 'node:fs';
+import { readFileSync, mkdirSync, appendFileSync, accessSync, statSync, constants } from 'node:fs';
+import { writePrivate, DIR_MODE, FILE_MODE } from './files.mjs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve, basename, relative, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +10,7 @@ import { createHubSpotClient, HubSpotError, validToken, BAD_TOKEN_MESSAGE } from
 import { buildSnapshot } from './snapshot.mjs';
 import { writeSnapshot, findPrevious } from './store.mjs';
 import { compare } from './compare.mjs';
+import { DAY_MS } from './format.mjs';
 import { renderBrief, unknownStageLine, GROUP_BY } from './render.mjs';
 import { postToSlack, validSlackWebhook, BAD_WEBHOOK_MESSAGE } from './slack.mjs';
 import { statelessRead, buildStateless, compareStateless, StatelessRefusal } from './stateless.mjs';
@@ -16,7 +18,10 @@ import { statelessRead, buildStateless, compareStateless, StatelessRefusal } fro
 const DEMO_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'demo');
 export const DEMO_DATES = ['2026-09-28', '2026-10-05'];
 
-export const NPX = 'npx github:derrtaderr/monday-pipeline-brief';
+// The npx command shown to npx users pins this release, so what it suggests never runs a later
+// change to the repository.
+export const VERSION = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf8')).version;
+export const NPX = `npx github:derrtaderr/monday-pipeline-brief#v${VERSION}`;
 const DEFAULT_INVOCATION = 'node bin/monday-brief.mjs';
 
 // How the user started us, so every message shows a command that exists for them.
@@ -55,7 +60,9 @@ Usage:
       Show this help.
 
 Environment:
-  HUBSPOT_TOKEN       HubSpot service key or private app token (scopes crm.objects.deals.read, crm.objects.owners.read). Required for run.
+  HUBSPOT_TOKEN       HubSpot service key or private app token (scopes
+                      crm.objects.deals.read, crm.objects.owners.read, and
+                      settings.currencies.read for stateless mode). Required for run.
   SLACK_WEBHOOK_URL   Optional Slack incoming webhook. When set, run also posts the brief there.
   MONDAY_BRIEF_DIR    Snapshot folder when --dir is not given. Default ~/.monday-pipeline-brief
   MONDAY_BRIEF_NEXT_STEP=off   Same as --no-next-step (handy in a scheduled job's env file).
@@ -92,11 +99,13 @@ function parseFlags(args) {
   return flags;
 }
 
-// A folder or file value as typed: one layer of matching quotes (left by env files and
-// plists, where the shell does not strip them) is removed, and a leading ~ means home.
+// One layer of matching quotes around a value, left by env files and plists where the shell
+// does not strip them, is removed.
+export const unquote = (value) => /^(["'])(.*)\1$/s.exec(value)?.[2] ?? value;
+
+// A folder or file value as typed: unquoted, and a leading ~ means home.
 export function pathValue(value, home, cwd) {
-  const unquoted = /^(["'])(.*)\1$/s.exec(value)?.[2] ?? value;
-  return resolve(cwd, unquoted.replace(/^~(?=$|[\\/])/, home));
+  return resolve(cwd, unquote(value).replace(/^~(?=$|[\\/])/, home));
 }
 
 class UsageError extends Error {}
@@ -106,7 +115,7 @@ const AMOUNT = /^\$?(\d+(?:\.\d+)?)([km])?$/i;
 // A large-deal setting as typed: dollars (50000, 75,000, $50K, 1.5M), or off. Unset is
 // undefined, which means the default (the largest open deals, at most 10% of them). Anything else throws.
 export function largeDealSetting(value, name = '--large-deal') {
-  const v = (value ?? '').trim().replace(/^(["'])(.*)\1$/s, '$2').replace(/,/g, '');
+  const v = unquote((value ?? '').trim()).replace(/,/g, '');
   if (!v) return undefined;
   if (/^off$/i.test(v)) return false;
   const m = AMOUNT.exec(v);
@@ -128,14 +137,9 @@ export function redact(text, env = {}) {
     .replace(/https:\/\/hooks\.slack\.com\/\S+/gi, '[redacted]');
 }
 
-// Deal data is private: new folders are 0700 and new files 0600.
-export const DIR_MODE = 0o700;
-export const FILE_MODE = 0o600;
-
-function writeFile(file, text) {
-  mkdirSync(dirname(file), { recursive: true, mode: DIR_MODE });
-  writeFileSync(file, text, { mode: FILE_MODE });
-}
+// Deal data is private: new folders are 0700 and new files 0600 (files.mjs).
+export { DIR_MODE, FILE_MODE };
+const writeFile = writePrivate;
 
 export function demoBrief({ groupBy = null, largeDeal } = {}) {
   const [prev, curr] = DEMO_DATES.map((d) => JSON.parse(readFileSync(join(DEMO_DIR, `snapshot-${d}.json`), 'utf8')));
@@ -145,7 +149,7 @@ export function demoBrief({ groupBy = null, largeDeal } = {}) {
 // --group-by wins over MONDAY_BRIEF_GROUP_BY; either must name owner or pipeline.
 export function groupBySetting(flag, env) {
   const [value, name] = flag !== undefined ? [flag, '--group-by'] : [env, 'MONDAY_BRIEF_GROUP_BY'];
-  const v = (value ?? '').trim().replace(/^(["'])(.*)\1$/s, '$2').toLowerCase();
+  const v = unquote((value ?? '').trim()).toLowerCase();
   if (!v) return null;
   if (!GROUP_BY.includes(v)) throw new UsageError(`${name} must be owner or pipeline (got "${value}")`);
   return v;
@@ -166,12 +170,11 @@ function briefSettings(flags, env) {
 // deals for 90 days). MONDAY_BRIEF_SINCE stands in for --since when neither flag is given.
 // Returns null for stored mode. Anything else is a usage error.
 export const MAX_SINCE_DAYS = 90;
-const DAY_MS = 86400000;
 const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
 export function asOfSetting({ since, asOf }, env, now) {
   if (since !== undefined && asOf !== undefined) throw new UsageError('Give --since or --as-of, not both');
   if (asOf !== undefined) {
-    const v = asOf.trim().replace(/^(["'])(.*)\1$/s, '$2');
+    const v = unquote(asOf.trim());
     if (!ISO_INSTANT.test(v) || Number.isNaN(Date.parse(v))) throw new UsageError(`--as-of needs an ISO instant with a time and a zone, such as 2026-10-01T09:00:00Z (got "${asOf}")`);
     // Date.parse rolls 2026-09-31 over to Oct 1; a date must name a real calendar day.
     const [y, mo, d] = v.slice(0, 10).split('-').map(Number);
@@ -185,7 +188,7 @@ export function asOfSetting({ since, asOf }, env, now) {
     return t;
   }
   const [value, name] = since !== undefined ? [since, '--since'] : [env.MONDAY_BRIEF_SINCE, 'MONDAY_BRIEF_SINCE'];
-  const v = (value ?? '').trim().replace(/^(["'])(.*)\1$/s, '$2');
+  const v = unquote((value ?? '').trim());
   if (!v) return null;
   const m = /^(\d+)d$/i.exec(v);
   const days = m ? Number(m[1]) : NaN;
@@ -223,6 +226,41 @@ function checkWritable(file) {
   accessSync(file, constants.W_OK);
 }
 
+// The setup checks both run modes share, made before HubSpot is called: the token and the Slack
+// webhook. Writes the problem and returns null when one fails.
+function credentials(ctx) {
+  const { env, stderr } = ctx;
+  const token = env.HUBSPOT_TOKEN?.trim();
+  if (!token) {
+    stderr.write(`HUBSPOT_TOKEN is not set. Create a HubSpot service key (or a private app on older accounts) as the README quickstart shows, then export HUBSPOT_TOKEN.\nTo see a sample brief without a token, run: ${ctx.invocation ?? DEFAULT_INVOCATION} demo\n`);
+    return null;
+  }
+  if (!validToken(token)) {
+    stderr.write(`${BAD_TOKEN_MESSAGE}\nNothing was fetched from HubSpot.\n`);
+    return null;
+  }
+  const hook = env.SLACK_WEBHOOK_URL?.trim();
+  if (hook && !validSlackWebhook(hook)) {
+    stderr.write(`${BAD_WEBHOOK_MESSAGE}\nNothing was fetched from HubSpot.\n`);
+    return null;
+  }
+  return { token, hook };
+}
+
+// The --out file, checked before HubSpot is called: null when none was given, undefined (with
+// the problem written) when it cannot be written.
+function briefLocation(flags, ctx) {
+  if (!flags.out) return null;
+  const file = pathValue(flags.out, ctx.home ?? homedir(), ctx.cwd);
+  try {
+    checkWritable(file);
+  } catch (err) {
+    ctx.stderr.write(`Cannot write the brief to ${file} (${err.code ?? 'error'}). Choose a location you can write to with --out. Nothing was fetched from HubSpot.\n`);
+    return undefined;
+  }
+  return file;
+}
+
 async function runCommand(flags, ctx) {
   const home = ctx.home ?? homedir();
   const dir = pathValue(flags.dir ?? (ctx.env.MONDAY_BRIEF_DIR || join(home, DEFAULT_DIR)), home, ctx.cwd);
@@ -242,20 +280,9 @@ async function runCommand(flags, ctx) {
 
 async function runInner(flags, ctx, dir) {
   const { env, stdout, stderr } = ctx;
-  const token = env.HUBSPOT_TOKEN?.trim();
-  if (!token) {
-    stderr.write(`HUBSPOT_TOKEN is not set. Create a HubSpot service key (or a private app on older accounts) as the README quickstart shows, then export HUBSPOT_TOKEN.\nTo see a sample brief without a token, run: ${ctx.invocation ?? DEFAULT_INVOCATION} demo\n`);
-    return 1;
-  }
-  if (!validToken(token)) {
-    stderr.write(`${BAD_TOKEN_MESSAGE}\nNothing was fetched from HubSpot.\n`);
-    return 1;
-  }
-  const hook = env.SLACK_WEBHOOK_URL?.trim();
-  if (hook && !validSlackWebhook(hook)) {
-    stderr.write(`${BAD_WEBHOOK_MESSAGE}\nNothing was fetched from HubSpot.\n`);
-    return 1;
-  }
+  const creds = credentials(ctx);
+  if (!creds) return 1;
+  const { token, hook } = creds;
   try {
     mkdirSync(dir, { recursive: true, mode: DIR_MODE });
     accessSync(dir, constants.W_OK);
@@ -269,15 +296,8 @@ async function runInner(flags, ctx, dir) {
     stderr.write(`Cannot read the snapshot folder ${dir} (${err.code ?? 'error'}). Choose a folder you can read and write with --dir or MONDAY_BRIEF_DIR.\n`);
     return 1;
   }
-  const briefFile = flags.out ? pathValue(flags.out, ctx.home ?? homedir(), ctx.cwd) : null;
-  if (briefFile) {
-    try {
-      checkWritable(briefFile);
-    } catch (err) {
-      stderr.write(`Cannot write the brief to ${briefFile} (${err.code ?? 'error'}). Choose a location you can write to with --out. Nothing was fetched from HubSpot.\n`);
-      return 1;
-    }
-  }
+  const briefFile = briefLocation(flags, ctx);
+  if (briefFile === undefined) return 1;
   const date = localDate(ctx.now);
   const client = createHubSpotClient({ token, fetch: ctx.fetch, sleep: ctx.sleep });
 
@@ -305,7 +325,7 @@ async function runInner(flags, ctx, dir) {
   const nextStep = !(flags.nextStep === false || /^(off|false|0|no)$/i.test(env.MONDAY_BRIEF_NEXT_STEP ?? ''));
   const result = compare(previous, snapshot, date, { nextStep, largeDeal: flags.largeDeal });
   const brief = renderBrief(result, { skipped, groupBy: flags.groupBy });
-  const unknown = unknownStageLine(result.unknownStage);
+  const unknown = unknownStageLine(result.unknownStage, { dollars: false });
   if (unknown) stderr.write(`Warning: ${unknown}\n`);
   const target = briefFile ?? join(dir, `brief-${date}.md`);
   stdout.write(brief);
@@ -320,7 +340,7 @@ async function runInner(flags, ctx, dir) {
     : `Saved ${basename(snapFile)} and ${basename(target)} in ${dir}\n`);
 
   if (hook) {
-    const sent = await postToSlack(hook, brief, ctx.fetch);
+    const sent = await postToSlack(hook, (limit) => renderBrief(result, { skipped, groupBy: flags.groupBy, limit }), ctx.fetch, { saved: target });
     if (!sent.ok) {
       stderr.write(`Slack post failed (${sent.reason}). The brief is saved at ${target}. Check SLACK_WEBHOOK_URL.\n`);
       return 3;
@@ -335,29 +355,11 @@ async function runInner(flags, ctx, dir) {
 // read, nor today's) and no run.log; the brief goes to stdout, --out and Slack only.
 async function statelessCommand(flags, ctx, asOf) {
   const { env, stdout, stderr } = ctx;
-  const token = env.HUBSPOT_TOKEN?.trim();
-  if (!token) {
-    stderr.write(`HUBSPOT_TOKEN is not set. Create a HubSpot service key (or a private app on older accounts) as the README quickstart shows, then export HUBSPOT_TOKEN.\nTo see a sample brief without a token, run: ${ctx.invocation ?? DEFAULT_INVOCATION} demo\n`);
-    return 1;
-  }
-  if (!validToken(token)) {
-    stderr.write(`${BAD_TOKEN_MESSAGE}\nNothing was fetched from HubSpot.\n`);
-    return 1;
-  }
-  const hook = env.SLACK_WEBHOOK_URL?.trim();
-  if (hook && !validSlackWebhook(hook)) {
-    stderr.write(`${BAD_WEBHOOK_MESSAGE}\nNothing was fetched from HubSpot.\n`);
-    return 1;
-  }
-  const briefFile = flags.out ? pathValue(flags.out, ctx.home ?? homedir(), ctx.cwd) : null;
-  if (briefFile) {
-    try {
-      checkWritable(briefFile);
-    } catch (err) {
-      stderr.write(`Cannot write the brief to ${briefFile} (${err.code ?? 'error'}). Choose a location you can write to with --out. Nothing was fetched from HubSpot.\n`);
-      return 1;
-    }
-  }
+  const creds = credentials(ctx);
+  if (!creds) return 1;
+  const { token, hook } = creds;
+  const briefFile = briefLocation(flags, ctx);
+  if (briefFile === undefined) return 1;
   const client = createHubSpotClient({ token, fetch: ctx.fetch, sleep: ctx.sleep });
   let built;
   try {
@@ -373,16 +375,17 @@ async function statelessCommand(flags, ctx, asOf) {
     return 2;
   }
   const nextStep = !(flags.nextStep === false || /^(off|false|0|no)$/i.test(env.MONDAY_BRIEF_NEXT_STEP ?? ''));
-  const result = compareStateless(built.previous, built.current, built.unknown, built.current.date, { nextStep, largeDeal: flags.largeDeal, pushes: built.pushes });
+  const result = compareStateless(built.previous, built.current, built.unknown, built.current.date, { nextStep, largeDeal: flags.largeDeal, pushes: built.pushes, layoutNotes: built.layoutNotes });
   const brief = renderBrief(result, { groupBy: flags.groupBy });
-  const unknown = unknownStageLine(result.unknownStage);
+  const unknown = unknownStageLine(result.unknownStage, { dollars: false });
   if (unknown) stderr.write(`Warning: ${unknown}\n`);
   stdout.write(brief);
-  // In a terminal the brief is on screen. Anywhere else (a pipe, a scheduled job, /dev/null) the
-  // printed copy may be the only one, so no message may point back at it as if it were kept.
+  // In a terminal the brief is on screen. Anywhere else (a pipe, a file redirect, a scheduled job,
+  // /dev/null) the tool cannot tell whether the printed copy was kept, so it says only what is
+  // true in every case: this run kept no copy of its own.
   const onlyPrinted = stdout.isTTY
     ? 'The brief was printed above.'
-    : 'The brief went to standard output only and was not saved; add --out FILE to keep a copy.';
+    : 'This run kept no copy of the brief of its own; unless standard output went to a file, add --out FILE to keep one.';
   if (briefFile) {
     try {
       writeFile(briefFile, brief);
@@ -391,16 +394,16 @@ async function statelessCommand(flags, ctx, asOf) {
       return 4;
     }
   }
-  stderr.write(`Stateless run: compared with HubSpot as of ${asOf.toISOString()}; no snapshot was saved${briefFile ? `; the brief was saved to ${briefFile}` : ''}.\n`);
+  stderr.write(`Stateless run: compared with HubSpot as of ${localDate(asOf)}, local time (${asOf.toISOString()} in UTC); no snapshot was saved${briefFile ? `; the brief was saved to ${briefFile}` : ''}.\n`);
   if (hook) {
-    const sent = await postToSlack(hook, brief, ctx.fetch);
+    const sent = await postToSlack(hook, (limit) => renderBrief(result, { groupBy: flags.groupBy, limit }), ctx.fetch, { saved: briefFile });
     if (!sent.ok) {
       stderr.write(`Slack post failed (${sent.reason}). ${briefFile ? `The brief is saved at ${briefFile}.` : onlyPrinted} Check SLACK_WEBHOOK_URL.\n`);
       return 3;
     }
     stderr.write('Posted the brief to Slack.\n');
   } else if (!briefFile && !stdout.isTTY) {
-    stderr.write('The brief went to standard output only: it was not saved or posted anywhere. Add --out FILE or set SLACK_WEBHOOK_URL to keep it.\n');
+    stderr.write('This run kept no copy of the brief of its own (no --out, no SLACK_WEBHOOK_URL). Unless standard output went to a file, add --out FILE or set SLACK_WEBHOOK_URL to keep it.\n');
   }
   return 0;
 }

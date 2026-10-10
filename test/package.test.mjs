@@ -16,12 +16,12 @@ test('the package ships only what a user runs: bin, src, demo, README, LICENSE',
   assert.ok(files.includes('demo/snapshot-2026-10-05.json'));
 });
 
-test('version 0.3.0, with changelog entries for it, 0.2.1, 0.2.0, 0.1.1 and 0.1.0, newest first', async () => {
+test('version 0.3.1, with changelog entries for it, 0.3.0, 0.2.1, 0.2.0, 0.1.1 and 0.1.0, newest first', async () => {
   const { readFileSync } = await import('node:fs');
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
-  assert.equal(pkg.version, '0.3.0');
+  assert.equal(pkg.version, '0.3.1');
   const log = readFileSync(new URL('../CHANGELOG.md', import.meta.url), 'utf8');
-  const order = ['## 0.3.0', '## 0.2.1', '## 0.2.0', '## 0.1.1', '## 0.1.0'];
+  const order = ['## 0.3.1', '## 0.3.0', '## 0.2.1', '## 0.2.0', '## 0.1.1', '## 0.1.0'];
   for (const h of order) assert.match(log, new RegExp(`^${h.replace(/\./g, '\\.')}\\b`, 'm'));
   for (let i = 1; i < order.length; i++) assert.ok(log.indexOf(order[i - 1]) < log.indexOf(order[i]), 'newest first');
 });

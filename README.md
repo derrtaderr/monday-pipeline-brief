@@ -12,7 +12,7 @@ It is free, it runs on your machine (or in your own GitHub Action) with your own
 
 ## What the brief looks like
 
-This is the real output of `node bin/monday-brief.mjs demo` (or `npx github:derrtaderr/monday-pipeline-brief#v0.3.0 demo`), run on a fictional pipeline (every company and rep name is made up, and the deal links point at a made-up HubSpot portal):
+This is the real output of `node bin/monday-brief.mjs demo` (or `npx github:derrtaderr/monday-pipeline-brief#v0.3.1 demo`), run on a fictional pipeline (every company and rep name is made up, and the deal links point at a made-up HubSpot portal):
 
 <!-- demo-output:start -->
 ```markdown
@@ -21,7 +21,7 @@ This is the real output of `node bin/monday-brief.mjs demo` (or `npx github:derr
 Compared with the snapshot from Sep 28.
 
 Open pipeline $1.29M across 23 deals, up $131K on last week.
-Closed 3 won ($135K) and 1 lost ($90K).
+Closed 3 won ($135K) and 1 lost ($90K). 1 deal changed after closing.
 
 **How the open pipeline changed**
 - Sep 28 open pipeline: $1,155,000
@@ -87,6 +87,9 @@ Closed 3 won ($135K) and 1 lost ($90K).
 - [Harbor Freightworks](https://app.hubspot.com/contacts/1234567/record/0-3/D127), $15K, Leo: won, moved from Sales Pipeline to Renewals
 - [Meridian](https://app.hubspot.com/contacts/1234567/record/0-3/D114), $90K, Dana: lost
 
+**Changed after closing** (1)
+- [Ironbridge Logistics](https://app.hubspot.com/contacts/1234567/record/0-3/D128), $45K, Marcus: was won, now lost
+
 **Removed from HubSpot** (1)
 - [Juniper Bio](https://app.hubspot.com/contacts/1234567/record/0-3/D116), $40K, Leo: was open in Discovery, not returned by HubSpot now (deleted, archived or merged)
 ```
@@ -121,11 +124,11 @@ You need Node 20 or newer and HubSpot admin rights (super admin, or permission t
    Replace everything between the quotes with the token you copied. If it is run exactly as shown, the tool rejects the placeholder on purpose and fetches nothing.
 3. **Run it.**
    ```bash
-   npx github:derrtaderr/monday-pipeline-brief#v0.3.0 run --since 7d
+   npx github:derrtaderr/monday-pipeline-brief#v0.3.1 run --since 7d
    # or, from a clone:
    node bin/monday-brief.mjs run --since 7d
    ```
-   It prints this week's brief, compared with your pipeline as it stood 7 days ago (`--since 3d` or `--since 14d` work too, up to 90 days). It writes nothing to disk; add `--out brief.md` to save a copy. A portal with more than one currency is refused (exit 5) with a message; stored mode below works there.
+   It prints this week's brief, compared with your pipeline as it stood 7 days ago (`--since 3d` or `--since 14d` work too, up to 90 days). It writes nothing to disk; add `--out brief.md` to save a copy. A portal with more than one currency is refused (exit 5) with a message; stored mode below runs there, with the limit on amounts noted under Limitations.
 4. **Optional, post to Slack.** Create a Slack incoming webhook for your channel and set it:
    ```bash
    export SLACK_WEBHOOK_URL="https://hooks.slack.com/services/..."
@@ -133,7 +136,7 @@ You need Node 20 or newer and HubSpot admin rights (super admin, or permission t
    Replace the whole URL with the one Slack gave you. The tool refuses a URL that still holds the `...` and stops before calling HubSpot.
 5. **Run it every week.** The simplest is the GitHub Action below, which keeps no state.
 
-**Stored mode instead.** Without `--since`, the tool keeps its own history: each run saves a snapshot of your deals to `~/.monday-pipeline-brief` in your home directory (the tool creates it) and compares with last week's file. The first run saves `snapshot-YYYY-MM-DD.json`, writes `brief-YYYY-MM-DD.md` there, and adds a line to `run.log`. A comparison needs two weekly runs, so the first brief says so plainly and shows only the current-state parts (open pipeline total, Close date passed, and the stale next step list). Stored mode works on any portal, needs only the first two scopes, and is not limited by what HubSpot's history keeps (see Stateless mode below). To schedule it, see the appendix at the end.
+**Stored mode instead.** Without `--since`, the tool keeps its own history: each run saves a snapshot of your deals to `~/.monday-pipeline-brief` in your home directory (the tool creates it) and compares with last week's file. The first run saves `snapshot-YYYY-MM-DD.json`, writes `brief-YYYY-MM-DD.md` there, and adds a line to `run.log`. A comparison needs two weekly runs, so the first brief says so plainly and shows only the current-state parts (open pipeline total, Close date passed, and the stale next step list). Stored mode runs on any portal (on one with more than one currency, see the note on amounts under Limitations), needs only the first two scopes, and is not limited by what HubSpot's history keeps (see Stateless mode below). To schedule it, see the appendix at the end.
 
 ### Options
 
@@ -148,7 +151,7 @@ You need Node 20 or newer and HubSpot admin rights (super admin, or permission t
 | Large deal (one warning sign is enough for "Look at these first") | `--large-deal AMOUNT` (`50000`, `50K`, `1.5M` or `off`), or `MONDAY_BRIEF_LARGE_DEAL`; the flag wins | the largest open deals, at most 10% of them (at least one, unless every deal above $0 has the same amount and they outnumber that limit) |
 | Group the brief | `--group-by owner` or `--group-by pipeline`, or `MONDAY_BRIEF_GROUP_BY`; the flag wins | one list |
 
-With `--group-by owner`, the headline and the dollar bridge stay at the top for the whole pipeline, then each rep gets a heading with their own open total and their own sections, largest open total first. `--group-by pipeline` does the same per pipeline, headed with the pipeline's name as it is today (a renamed pipeline stays one group; a pipeline that is gone keeps its last name; two pipelines with the same name each get their HubSpot pipeline id after the name, as they do on any line that names a move between them). Each section still shows its 10 largest deals per group.
+With `--group-by owner`, the headline and the dollar bridge stay at the top for the whole pipeline, then each rep gets a heading with their own open total and their own sections, largest open total first. Reps are told apart by their HubSpot owner id, so two reps with the same name get two headings, each name followed by the rep's email (or owner id), as on every line that names them. `--group-by pipeline` does the same per pipeline, headed with the pipeline's name as it is today (a renamed pipeline stays one group; a pipeline that is gone keeps its last name; two pipelines with the same name each get their HubSpot pipeline id after the name, as they do on any line that names a move between them). Each section still shows its 10 largest deals per group.
 
 <details>
 <summary>The demo grouped by owner (<code>node bin/monday-brief.mjs demo --group-by owner</code>)</summary>
@@ -160,7 +163,7 @@ With `--group-by owner`, the headline and the dollar bridge stay at the top for 
 Compared with the snapshot from Sep 28.
 
 Open pipeline $1.29M across 23 deals, up $131K on last week.
-Closed 3 won ($135K) and 1 lost ($90K).
+Closed 3 won ($135K) and 1 lost ($90K). 1 deal changed after closing.
 
 **How the open pipeline changed**
 - Sep 28 open pipeline: $1,155,000
@@ -256,6 +259,9 @@ Closed 3 won ($135K) and 1 lost ($90K).
 
 **Reopened** (1)
 - [Marlowe Systems](https://app.hubspot.com/contacts/1234567/record/0-3/D124), $30K, Marcus: was lost, now in Demo
+
+**Changed after closing** (1)
+- [Ironbridge Logistics](https://app.hubspot.com/contacts/1234567/record/0-3/D128), $45K, Marcus: was won, now lost
 ```
 <!-- demo-grouped-output:end -->
 
@@ -265,7 +271,7 @@ The token and the webhook URL are read from the environment only. There is delib
 
 ### Run it every week with GitHub Actions (no state)
 
-Stateless mode needs nowhere to keep files, so a scheduled GitHub Action is enough. Copy [`examples/github-action.yml`](examples/github-action.yml) to `.github/workflows/monday-brief.yml` in a repository of your own (the file sits under `examples/` here so it never runs on this repository), and add two repository secrets, `HUBSPOT_TOKEN` and `SLACK_WEBHOOK_URL`:
+Stateless mode needs nowhere to keep files, so a scheduled GitHub Action is enough. Copy [`examples/github-action.yml`](examples/github-action.yml) to `.github/workflows/monday-brief.yml` in a repository of your own (the file sits under `examples/` here so it never runs on this repository), and add two repository secrets, `HUBSPOT_TOKEN` and `SLACK_WEBHOOK_URL` (in that repository on GitHub: Settings → Secrets and variables → Actions, then **New repository secret**):
 
 ```yaml
 # Copy this file to .github/workflows/monday-brief.yml in a repository of your own.
@@ -283,14 +289,19 @@ jobs:
   brief:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
+      # #v0.3.1 pins the release tag. A tag can be moved by whoever controls the repository; for a
+      # pin nobody can move, replace #v0.3.1 below with the commit SHA the tag points at:
+      #   git ls-remote https://github.com/derrtaderr/monday-pipeline-brief refs/tags/v0.3.1 'refs/tags/v0.3.1^{}'
+      # Release tags here are lightweight, so the first line's SHA is the commit; a line ending
+      # ^{} (an annotated tag) would name the commit instead.
       # The brief goes to Slack. Its printed copy is thrown away, so deal names never
       # reach the workflow log, which anyone with read access to the repository can open.
       - run: |
           test -n "$SLACK_WEBHOOK_URL" || { echo "::error::Add the SLACK_WEBHOOK_URL secret: this job sends the brief to Slack only."; exit 1; }
-          npx --yes github:derrtaderr/monday-pipeline-brief#v0.3.0 run --since 7d > /dev/null
+          npx --yes github:derrtaderr/monday-pipeline-brief#v0.3.1 run --since 7d > /dev/null
         env:
           HUBSPOT_TOKEN: ${{ secrets.HUBSPOT_TOKEN }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -298,7 +309,7 @@ jobs:
 
 The brief reaches you in Slack. The workflow throws away the printed copy, because a workflow log can be read by anyone with read access to the repository; for the same reason the job fails at once, before reading HubSpot, when the `SLACK_WEBHOOK_URL` secret is missing. Run it once by hand from the Actions tab (Run workflow) to check it.
 
-The `#v0.3.0` in the `npx` line pins the release, so a later change to this repository never runs with your HubSpot token until you change the tag yourself. In a public repository, GitHub turns off scheduled workflows after 60 days with no repository activity and emails you when it does; re-enable it from the Actions tab.
+The `#v0.3.1` in the `npx` line pins the release tag, so a later change to this repository does not run with your HubSpot token while the tag stays where it is. A tag can be moved by whoever controls the repository, so for a pin nobody can move, replace `#v0.3.1` with the full commit SHA the tag points at, which `git ls-remote https://github.com/derrtaderr/monday-pipeline-brief refs/tags/v0.3.1 'refs/tags/v0.3.1^{}'` prints. Release tags of this repository are lightweight, so the SHA on the first line is the commit; if a line ending `^{}` ever appears (an annotated tag), that line's SHA is the commit (the comment in the workflow says the same). `actions/setup-node` is pinned by its commit SHA for the same reason. In a public repository, GitHub turns off scheduled workflows after 60 days with no repository activity and emails you when it does; re-enable it from the Actions tab.
 
 To run stored mode on a schedule instead, on your own machine with cron or launchd, see the appendix at the end.
 
@@ -306,9 +317,9 @@ To run stored mode on a schedule instead, on your own machine with cron or launc
 
 HubSpot keeps a history of every change to a deal property. `--since 7d` reads it and rebuilds each deal as it stood at that instant (the comparison date), then compares that with today, exactly as stored mode compares two snapshot files.
 
-- **What is read.** Your currency settings first. Then every live deal with its history (50 per page, HubSpot's limit when history is requested), the recycle bin without history, and the deals deleted since the comparison date read again with their full history (50 per request; the recycle bin listing keeps only one version of each property). Then each pipeline and its change log, so stage names and the stage order are the ones in force on that date (a pipeline whose change log is empty or missing uses today's), and owners. That is about twice the requests of stored mode: roughly 9 for 100 deals, 29 for 1,000 and 223 for 10,000 (with 1, 3 and 5 pipelines, and 2% of deals deleted in the week), all within HubSpot's rate limits.
+- **What is read.** Your currency settings first. Then every live deal with its history (50 per page, HubSpot's limit when history is requested), the recycle bin without history, and the deals deleted since the comparison date read again with their full history (50 per request; the recycle bin listing keeps only one version of each property). Then each pipeline and its change log, so stage names and the stage order are the ones in force on that date (a pipeline whose change log is empty or missing uses today's, and one whose change log starts after that date uses the oldest settings it kept), and owners. That is about twice the requests of stored mode: roughly 9 for 100 deals, 29 for 1,000 and 223 for 10,000 (with 1, 3 and 5 pipelines, and 2% of deals deleted in the week), all within HubSpot's rate limits.
 - **What it keeps.** Nothing. No snapshot is written, neither the rebuilt one (which a later stored run could mistake for a real one) nor today's, and no `run.log`. Only `--out`, if you give it, writes a file.
-- **Could not rebuild.** HubSpot keeps the newest 20 versions of each property. A deal changed more than 20 times since the comparison date in its stage, pipeline, amount or close date cannot be fully rebuilt, and neither can a deal that two deals were merged into since then (its history mixes both). So is a deal whose stage then is missing from the pipeline settings HubSpot kept for that date (limit 5 below). These deals are listed in their own section, "Could not rebuild as of Sep 28", which says what is unknown and names the merged records. When the state then is known (only the close date was lost, say), the deal still counts: "Sep 28 open pipeline: $215,000 ($206,000 rebuilt + $9,000 from 1 deal only partly rebuilt)". When it is not, the deal is left out of that total and the headline says so: "(the Sep 28 total leaves out 2 deals merged since then and 1 deal whose state then could not be rebuilt)". A bridge line, "Could not rebuild", carries those deals' amounts today, so the bridge still adds up to today's open total. Owner, next step and last activity are read from today only, so changes to those never stop a rebuild.
+- **Could not rebuild.** HubSpot keeps the newest 20 versions of each property. A deal changed more than 20 times since the comparison date in its stage, pipeline, amount or close date cannot be fully rebuilt, and neither can a deal that two deals were merged into since then (its history mixes both). So is a deal whose stage then is missing from the pipeline settings HubSpot kept for that date (limit 5 below), and a deal that existed then but whose history holds no stage for that date. These deals are listed in their own section, "Could not rebuild as of Sep 28", which says what is unknown and names the merged records. When the state then is known (only the close date was lost, say), the deal still counts: "Sep 28 open pipeline: $215,000 ($206,000 rebuilt + $9,000 from 1 deal only partly rebuilt)". When it is not, the deal is left out of that total and the headline says so: "(the Sep 28 total leaves out 2 deals merged since then and 1 deal whose state then could not be rebuilt)". A bridge line, "Could not rebuild", carries those deals' amounts today, so the bridge still adds up to today's open total. Owner, next step and last activity are read from today only, so changes to those never stop a rebuild.
 - **Pushes.** A close date moved later two or more times since the comparison date says so on its Slipped line: "(+46 days, pushed 2 times)". Only later dates count; a pull-in, a cleared date and the date HubSpot stamps when a deal closes do not.
 
 What stateless mode cannot see, where stored mode can:
@@ -317,7 +328,7 @@ What stateless mode cannot see, where stored mode can:
 2. **More than 20 changes** to a deal's stage, pipeline, amount or close date since the comparison date (above).
 3. **Restored deals.** A deal deleted before the comparison date and restored from the recycle bin since rebuilds as if it had never been deleted. Untested.
 4. **Permanently deleted deals** (a GDPR delete, or a recycle bin entry older than 90 days) are in no listing, so they vanish without a "Removed from HubSpot" line. Untested.
-5. **Deleted pipelines and stages.** A deal whose stage on the comparison date is missing from the pipeline settings HubSpot kept for that date (its pipeline or stage was deleted, or the pipeline's change log does not reach back that far) has no stage name and no open, won or lost status then. It is listed under Could not rebuild and left out of the start total, never counted as open.
+5. **Deleted pipelines and stages.** A deal whose pipeline on the comparison date has since been deleted, or whose stage then is missing from the settings HubSpot kept for its pipeline on that date (a deleted stage), has no stage name and no open, won or lost status then. It is listed under Could not rebuild, which says which of the two it is, and left out of the start total, never counted as open. When a pipeline's change log starts after the comparison date but deals sat in it then, the stages are read from the oldest settings HubSpot kept for it, and the brief says so under its first line; a stage deleted before that oldest entry still shows as missing.
 6. **Deals deleted moments before the run.** HubSpot's recycle bin listing can take a few seconds (in one test, under a minute) to show a deal just deleted. Such a deal drops out of both ends of the comparison and gets no Removed line.
 7. **Portals with more than one currency** are refused (exit 5) until stateless mode has been checked on one.
 
@@ -327,7 +338,7 @@ All deals in all deal pipelines are read. "Open" means the deal's stage is not a
 
 - **Headline.** Sum of the deal amount over open deals now, and the change from the previous snapshot's open total. Won and lost: deals that are closed now and were open last week (or did not exist last week). Won means a closed stage with probability 100%; lost means any other closed stage. This comes from HubSpot's stage settings, never from the stage name.
 - **How the open pipeline changed.** A reconciliation from the previous snapshot's open total to today's, in exact dollars so the lines add up: new deals, reopened deals, amount increases and decreases on deals that were open, won, lost, and open deals no longer returned by HubSpot. Won and lost are counted at their closing amount, and any amount change on the way to closing is counted as an increase or decrease first. A deal that is new and already closed counts as new and as won or lost, which nets to zero. The tool checks that the lines add up before it writes the brief and stops with an error if they ever do not. Left out when nothing changed.
-- **Stages we couldn't read.** If an open deal's stage is missing from the pipeline settings HubSpot returns (usually an archived or deleted stage), the brief and the terminal say how many deals and how much money that is. Those deals are counted as open and are left out of stage-move checks.
+- **Stages we couldn't read.** If an open deal's stage is missing from the pipeline settings HubSpot returns (usually an archived or deleted stage), the brief says how many deals and how much money that is, and the terminal (stderr) says how many deals. Nothing the tool writes to stderr carries a dollar amount, since stderr can end up in a log other people can read, such as a public GitHub Action's. Those deals are counted as open and are left out of stage-move checks.
 - **Look at these first.** Open deals with at least one of these flags: close date slipped, moved back a stage, close date passed, no next step or no activity in 14+ days. A deal is listed when it has two or more flags, or one flag and either it is a large deal or its close date slipped into a later calendar quarter (for example Q4 2026 to Q1 2027). Each line ends with why it is there, such as "(2 warning signs)", "(large deal)" or "(slipped into Q1 2027)".
 
   By default the large deals are the largest open deals, at most 10% of them (at least one, unless every deal above $0 has the same amount and they outnumber that limit): 2 of 21 deals, 50 of 500. Deals tied on the same amount right at the cut-off are left out together, so a tie never pushes the list past 10%; if that would leave no large deal at all and every open deal with an amount is the same size, no deal is large, since none is larger than the rest; otherwise the tied deals are taken in order of lowest HubSpot record id (normally the oldest record) up to the limit. A $0 deal is never large. A fixed dollar figure would be wrong for most teams, since deal sizes differ by 100x from one company to the next, so the default scales with your pipeline. Set your own with `--large-deal 50000` (or `50K`, `1.5M`), or `MONDAY_BRIEF_LARGE_DEAL=50000` in your env file, or turn the rule off with `off`.
@@ -348,15 +359,21 @@ All deals in all deal pipelines are read. "Open" means the deal's stage is not a
 - **New this week.** Deals that were not in the previous snapshot.
 - **Reopened.** Deals that were won or lost last time and are open again.
 - **Closed.** The won and lost deals from the headline. A deal that went from an open stage straight to a closed stage of another pipeline says so: "won, moved from Sales Pipeline to Onboarding" (and with `--group-by pipeline` it is listed under both pipelines). It is still counted once as won or lost in the bridge.
+- **Changed after closing.** Deals that were closed last time and are still closed now, but whose result flipped ("was won, now lost", or the reverse) or whose amount moved ("won amount $250,000 → $300,000"). They are not counted in Closed, which is the deals closed this week; the headline adds "1 deal changed after closing." They were closed at both ends of the comparison, so they were never part of the open pipeline and the dollar bridge does not change. On a portal with more than one currency, a closed deal whose amount moved only with the exchange rate (its own amount and currency unchanged) is not a change and is not listed or counted.
 - **Removed from HubSpot.** Deals that were open last time and that HubSpot no longer returns (deleted, archived or merged).
 - **Could not rebuild** (stateless mode only). Deals HubSpot's history could not rebuild on the comparison date, as described under Stateless mode, each with what is unknown and, for a merge, the merged record ids.
 
-Each deal's name links to the deal in HubSpot (in Slack too). Snapshots written by v0.1 have no link, so a deal seen only in one of those shows its plain name. Lists are sorted by amount, largest first. Each section shows its 10 largest deals, then one line such as "and 37 more ($1.2M)", so a big pipeline still gives a short brief; the section heading always carries the full count. Empty sections are left out. The Slack message is also kept under 35,000 characters, below Slack's limit; if it ever has to be cut, it says so and the saved file is the full brief.
+Each deal's name links to the deal in HubSpot (in Slack too). Snapshots written by v0.1 have no link, so a deal seen only in one of those shows its plain name. Lists are sorted by amount, largest first. Each section shows its 10 largest deals, then one line such as "and 37 more ($1.2M)", so a big pipeline still gives a short brief; the section heading always carries the full count. Empty sections are left out. The Slack message is also kept under 35,000 characters, below Slack's limit. A brief too long for that (usually a big team grouped by rep) is first shown in Slack with fewer deals per section (5, then 3, then 1), so every rep and section keeps its heading and its "and N more" line, and a note says so; only if that still does not fit is it cut short. Either note says where the full brief is: the saved file's name (never its full path, which would show your home folder in the channel) on the machine that ran it, or, in stateless mode without `--out`, to run with `--out FILE`.
 
 ## Where your data goes
 
 - Stateless mode writes nothing to disk except the brief file you name with `--out`.
-- In stored mode, snapshots are plain JSON on your disk, one file per week, kept private: folders and files the tool creates get permissions 0700 (folders) and 0600 (snapshots, briefs, `run.log`), and existing ones keep their permissions, so if you point `--dir` at a folder you already have, check who can read it. Each snapshot holds only these fields per deal: id, name, owner name, pipeline, stage, stage order, open/won/lost, amount, close date, next step text, last activity date, creation date and the link to the deal in HubSpot. It also holds each pipeline's stage list (id, name, order and open/won/lost), so later briefs can read stage moves in the order that was current.
+- In stored mode, snapshots are plain JSON on your disk, one file per week, kept private: folders and files the tool creates get permissions 0700 (folders) and 0600 (snapshots, briefs, `run.log`), and existing ones keep their permissions, so if you point `--dir` at a folder you already have, check who can read it. Each snapshot holds only these fields per deal: id, name, owner label and owner id (the label is the owner's name, followed by their email when two owners share a name), pipeline, stage, stage order, open/won/lost, amount, the deal's own currency and amount in it, close date, next step text, last activity date, creation date and the link to the deal in HubSpot. It also holds each pipeline's stage list (id, name, order and open/won/lost), so later briefs can read stage moves in the order that was current.
+- Snapshots add up: each is about half a kilobyte per deal (about 0.5 MB a run for 1,000 deals, so roughly 25 MB a year of weekly runs), plus one brief per run. The tool never deletes anything. Each brief needs only the snapshot from about a week before, so you can safely prune anything older than five weeks by hand:
+  ```bash
+  find ~/.monday-pipeline-brief -name 'snapshot-*.json' -mtime +35 -delete
+  ```
+  (use your own folder if you set `--dir` or `MONDAY_BRIEF_DIR`; the same with `brief-*.md` for old briefs).
 - The token is sent only to `api.hubapi.com` in the Authorization header. It is never written to a snapshot, the brief, a log or an error message, and a test checks that across every success and failure path.
 - No telemetry. The tool never phones home.
 
@@ -381,7 +398,7 @@ Rate limits (HTTP 429) and HubSpot server errors are retried up to 5 times, wait
 - In stored mode, history starts on your first run. Stateless mode rebuilds up to 90 days back, within the limits listed under Stateless mode.
 - All deal pipelines are read into one brief. `--group-by pipeline` gives each pipeline its own heading and sections; the headline and the dollar bridge stay whole-portal.
 - Quarters are calendar quarters; a fiscal year that starts in another month is not configurable yet.
-- Amounts: each deal uses `amount_in_home_currency` (HubSpot's conversion to your company currency) when HubSpot returns it, and falls back to `amount` when it does not. If your portal has multiple currencies turned off, that is simply `amount`. No other currency conversion is done. Stateless mode refuses portals with more than one currency.
+- Amounts: each deal uses `amount_in_home_currency` (HubSpot's conversion to your company currency) when HubSpot returns it, and falls back to `amount` when it does not. If your portal has multiple currencies turned off, that is simply `amount`. No other currency conversion is done. On a portal with more than one currency, HubSpot converts at its current exchange rate, so a rate change moves a deal's amount in stored mode even when nobody touched the deal. When the deal's own amount and currency did not change, the Amount changed line says "(exchange rate)", and a closed deal moved only by the rate is left out of Changed after closing. Snapshots written before v0.3.1 do not hold the deal's own currency, so in the first comparison after upgrading an amount change on a deal in another currency says "(currency unknown last week)" instead: it may be a real edit or a rate move. This has not been checked on a real multi-currency portal. Stateless mode refuses portals with more than one currency.
 - Dates are taken as the calendar date HubSpot returns (UTC), which can differ by a day from what you see in your time zone.
 - The stale check uses last logged activity, which is only as good as your team's logging.
 - In Slack, a HubSpot name that contains formatting marks (`*bold*`, `_italic_`, `~strike~` or backticks) shows with that formatting, and a Markdown viewer may format it too. Slack has no escape for these marks, so the name is sent as typed; links, mentions and HTML in names are always neutralised.
@@ -513,6 +530,6 @@ The brief is already saved in `~/.monday-pipeline-brief`, so the launchd job thr
 - Every run appends one line to `~/.monday-pipeline-brief/run.log` with the time, the exit code and what happened (secrets removed). Check it with `tail ~/.monday-pipeline-brief/run.log`. A Monday line with `exit=0` means the brief was written.
 - No new line on a Monday means the job never started the tool. The usual causes are a missing or misnamed `~/.monday-brief.env` (the schedule reads it first, and without it the shell stops before the tool starts; check with `ls -l ~/.monday-brief.env`), a wrong `/path/to/node`, and on a Mac the repo sitting in `~/Documents`, `~/Desktop` or `~/Downloads`, which macOS privacy controls (TCC) hide from scheduled jobs (move the clone; granting Full Disk Access also works, but it is a much wider permission than this tool needs). For cron, check your system mail or run the cron line by hand. For launchd, run `launchctl list | grep monday-brief` (the middle number is the last exit code) and read `/tmp/monday-brief.launchd.log`, where launchd writes anything printed before the tool could log.
 
-**Scheduled and ad-hoc runs.** You can also run it by hand mid-week. Each brief compares with the newest snapshot that is at least 6 days old, so a Friday run by hand does not replace last Monday as the baseline for the next Monday brief. Only when there is no snapshot that old does it compare with the newest earlier one.
+**Scheduled and ad-hoc runs.** You can also run it by hand mid-week. Each brief compares with the newest snapshot that is 7 or 8 days old, so a Tuesday or Friday run by hand does not replace last Monday as the baseline for the next Monday brief. With none that age (last week's run was a day late, say), it uses the newest snapshot at least 6 days old, and only when there is no snapshot that old does it compare with the newest earlier one.
 
 If a week is skipped, for example because the Mac was asleep or off at the scheduled time and cron does not catch up, the next run says how old its comparison is ("Compared with the snapshot from Sep 21, 2 weeks ago", and "up $39K since Sep 21" instead of "on last week"), so a gap is visible rather than hidden. launchd runs a job it missed while the Mac was asleep as soon as it wakes, so on a laptop prefer launchd, or pick a time the machine is usually on. If a snapshot file is unreadable (truncated or hand-edited), the brief names it ("Skipped unreadable snapshot-2026-09-28.json (not valid JSON).") and compares with the next older one.

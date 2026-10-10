@@ -5,7 +5,7 @@
 import { HubSpotError } from './hubspot.mjs';
 import { buildSnapshot } from './snapshot.mjs';
 import { compare } from './compare.mjs';
-import { cents } from './bridge.mjs';
+import { cents, assertBalanced } from './bridge.mjs';
 import { rebuildAt, layoutsAt, archivedBatches, closeDateMoves } from './history.mjs';
 
 // Stateless mode will not run on this portal. The CLI exits 5 with the message.
@@ -16,7 +16,7 @@ export class StatelessRefusal extends Error {
   }
 }
 
-export const MULTI_CURRENCY_MESSAGE = 'This HubSpot portal uses more than one currency. Stateless mode has not been validated on multi-currency portals, so it will not rebuild last week from history here. Run without --since or --as-of to use stored snapshots, which work on any portal.';
+export const MULTI_CURRENCY_MESSAGE = 'This HubSpot portal uses more than one currency. Stateless mode has not been validated on multi-currency portals, so it will not rebuild last week from history here. Run without --since or --as-of to use stored snapshots, which run on any portal (their amounts follow HubSpot exchange rates; see Limitations in the README).';
 
 // The read path for one as-of instant T. Currency first: a portal with any exchange rate has more
 // than one currency, and nothing else is read. Then live deals with history (50 per page), the
@@ -39,7 +39,7 @@ export async function statelessRead(client, T) {
   const audits = new Map();
   for (const p of pipelines) audits.set(p.id, await client.pipelineAudit(p.id));
   const owners = await client.listOwners();
-  return { live, archived, archivedListed: archivedList.length, pipelines, audits, owners };
+  return { live, archived, pipelines, audits, owners };
 }
 
 // The previous snapshot rebuilt at T (with the stage layout at T), today's snapshot from the live
@@ -52,7 +52,11 @@ export function buildStateless({ live, archived, pipelines, audits, owners, T, n
   const seen = new Set();
   const records = [...archived, ...live].filter((r) => !seen.has(String(r.id)) && seen.add(String(r.id)));
   const atT = rebuildAt(records, T);
-  const layoutT = layoutsAt(pipelines, audits, T);
+  const inUse = new Set([...atT.deals, ...atT.unknown].map((x) => x.properties?.pipeline).filter((x) => x != null));
+  const layoutT = layoutsAt(pipelines, audits, T, inUse);
+  // A pipeline whose change log starts after T took its stages then from its oldest entry.
+  const layoutNotes = layoutT.filter((l) => l.fallbackFrom).map((l) => ({ id: l.id, label: l.label, from: l.fallbackFrom }));
+  const livePipelines = new Set(pipelines.map((p) => p.id));
   // A stage at T that the layout at T does not hold (a deleted pipeline or stage, or an audit that
   // starts after T) gives no status then. buildSnapshot would call it open; here it is unknown.
   const inLayout = new Set(layoutT.flatMap((p) => (p.stages ?? []).map((s) => `${p.id}/${s.id}`)));
@@ -68,7 +72,8 @@ export function buildStateless({ live, archived, pipelines, audits, owners, T, n
       const fields = known(row) ? u.fields : [...u.fields, ...STATUS_FIELDS.filter((f) => !u.fields.includes(f))];
       return { ...u, fields, atT: row };
     }),
-    ...rebuilt.deals.filter((row) => !known(row)).map((row) => ({ id: row.id, reason: 'layout', fields: STATUS_FIELDS, atT: row })),
+    // What the tool can see of the cause: a pipeline gone today, or a stage missing from it.
+    ...rebuilt.deals.filter((row) => !known(row)).map((row) => ({ id: row.id, reason: 'layout', cause: livePipelines.has(row.pipeline_id) ? 'stage' : 'pipeline', fields: STATUS_FIELDS, atT: row })),
   ].filter((u, i, all) => all.findIndex((x) => x.id === u.id) === i);
   const current = buildSnapshot({ deals: live, pipelines, owners, takenAt: now, date });
   const pushes = new Map();
@@ -76,7 +81,7 @@ export function buildStateless({ live, archived, pipelines, audits, owners, T, n
     const n = closeDateMoves(r.propertiesWithHistory?.closedate, T, now);
     if (n > 0) pushes.set(String(r.id), n);
   }
-  return { previous, current, unknown, pushes };
+  return { previous, current, unknown, pushes, layoutNotes };
 }
 
 // compare() for a rebuilt previous snapshot. Each could-not-rebuild entry may carry atT, its
@@ -97,6 +102,8 @@ export function compareStateless(previous, current, unknown, today, opts) {
     ...u.atT,
     close_date: u.fields.includes('close_date') ? null : u.atT.close_date,
     amount: u.fields.includes('amount') ? 0 : u.atT.amount,
+    // compare() never reports an amount change from an amount that is unknown.
+    ...(u.fields.includes('amount') ? { amount_unknown: true } : {}),
   }));
   const r = compare({ ...previous, deals: [...previous.deals, ...rows] }, current, today, opts);
   const byId = new Map(current.deals.map((x) => [x.id, x]));
@@ -127,8 +134,9 @@ export function compareStateless(previous, current, unknown, today, opts) {
   r.stateless = true;
   // How many times each deal's close date was pushed later since T, for the Slipped lines.
   r.pushes = opts?.pushes ?? new Map();
+  r.layoutNotes = opts?.layoutNotes ?? [];
   const walked = b.start + b.new.cents + b.reopened.cents + b.increases.cents - b.decreases.cents
     - b.won.cents - b.lost.cents - b.removed.cents + b.couldNotRebuild.cents;
-  if (walked !== b.end) throw new Error(`stateless bridge does not balance: walked to ${walked} cents, open total is ${b.end}`);
+  assertBalanced(walked, b.end);
   return r;
 }

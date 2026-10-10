@@ -299,5 +299,16 @@
   "next_step": "Kickoff",
   "next_step_date": "2026-10-09",
   "status": "won"
+ },
+ {
+  "id": "D128",
+  "name": "Ironbridge Logistics",
+  "owner": "Marcus",
+  "stage": "Negotiation",
+  "amount": 45000,
+  "close_date": "2026-09-24",
+  "next_step": "",
+  "next_step_date": null,
+  "status": "lost"
  }
 ]

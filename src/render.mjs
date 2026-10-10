@@ -1,9 +1,11 @@
 // Write the brief as markdown, and convert it to Slack mrkdwn.
 
-import { money, exactMoney, shortDate, daysBetween } from './format.mjs';
+import { money, exactMoney, shortDate, daysBetween, sumAmounts as sum } from './format.mjs';
 import { cents } from './bridge.mjs';
+import { STALE_DAYS } from './compare.mjs';
+import { HISTORY_CAP } from './history.mjs';
 
-const STALE_TITLE = 'No next step, or no activity in 14+ days';
+const STALE_TITLE = `No next step, or no activity in ${STALE_DAYS}+ days`;
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 // Every piece of CRM text (deal name, owner, stage label, pipeline label, group heading, and the
 // label of a deal record link) is made safe for one Markdown line wherever it renders: line
@@ -36,21 +38,23 @@ export const SECTION_LIMIT = 10;
 
 // rows are [deal, text] pairs, already sorted largest first. Show the top SECTION_LIMIT,
 // then one line with how many more and what they add up to.
-function capped(rows) {
-  const lines = rows.slice(0, SECTION_LIMIT).map(([, text]) => `- ${text}`);
-  const rest = rows.slice(SECTION_LIMIT);
+function capped(rows, limit = SECTION_LIMIT) {
+  const lines = rows.slice(0, limit).map(([, text]) => `- ${text}`);
+  const rest = rows.slice(limit);
   if (rest.length) lines.push(`- and ${rest.length} more (${money(rest.reduce((n, [d]) => n + d.amount, 0))})`);
   return lines;
 }
 
-function section(out, title, rows) {
+function section(out, title, rows, limit) {
   if (!rows.length) return;
-  out.push(`**${title}** (${rows.length})`, ...capped(rows), '');
+  out.push(`**${title}** (${rows.length})`, ...capped(rows, limit), '');
 }
 
-export function unknownStageLine({ count, total }) {
+// dollars: false for stderr, which can end up in a log others read (counts only there).
+export function unknownStageLine({ count, total }, { dollars = true } = {}) {
   if (!count) return null;
-  const subject = count === 1 ? `1 deal (${money(total)}) is in a stage` : `${count} deals (${money(total)}) are in stages`;
+  const amount = dollars ? ` (${money(total)})` : '';
+  const subject = count === 1 ? `1 deal${amount} is in a stage` : `${count} deals${amount} are in stages`;
   return `${subject} we couldn't read (archived or deleted in HubSpot), counted as open.`;
 }
 
@@ -88,8 +92,9 @@ function bridgeLines(r) {
   ];
 }
 
-const amountChange = ({ deal, from, to }) =>
-  `${who(deal)}: ${exactMoney(cents(from))} → ${exactMoney(cents(to))}${deal.status === 'open' ? '' : `, then ${deal.status}`}`;
+const noted = (note) => (note ? ` (${note})` : '');
+const amountChange = ({ deal, from, to, note }) =>
+  `${who(deal)}: ${exactMoney(cents(from))} → ${exactMoney(cents(to))}${noted(note)}${deal.status === 'open' ? '' : `, then ${deal.status}`}`;
 
 const stageRow = (m) => [m.deal, `${who(m.deal)}: ${escapeName(m.from)} → ${escapeName(m.deal.stage)}`];
 
@@ -121,20 +126,44 @@ const transferRow = (r) => (t) => {
 const overdueRows = (r) => r.overdue.map(({ deal, days }) => [deal, `${who(deal)}: close date was ${shortDate(deal.close_date)}, ${plural(days, 'day')} ago`]);
 
 export const GROUP_BY = ['owner', 'pipeline'];
-// Owner groups are keyed by owner name; pipeline groups by pipeline id (the label when a
-// snapshot has no id), so a renamed pipeline stays one group and two with one label stay two.
-const groupKey = (groupBy) => (d) => (groupBy === 'owner' ? d.owner ?? 'Unassigned' : d.pipeline_id ?? d.pipeline ?? 'No pipeline');
+// Pipeline groups are keyed by pipeline id (the label when a snapshot has no id), so a renamed
+// pipeline stays one group and two with one label stay two. Owner groups are keyed by owner id
+// the same way; a row from a snapshot written before owner ids were stored joins the one id that
+// carries its owner name in this brief, and otherwise is keyed by its name.
+const NAME_KEY = 'name:';
+function groupKey(groupBy, deals) {
+  if (groupBy !== 'owner') return (d) => d.pipeline_id ?? d.pipeline ?? 'No pipeline';
+  const ids = new Map();
+  for (const d of deals) {
+    if (d.owner_id == null) continue;
+    if (!ids.has(d.owner)) ids.set(d.owner, new Set());
+    ids.get(d.owner).add(d.owner_id);
+  }
+  return (d) => {
+    if (d.owner_id != null) return d.owner_id;
+    const named = ids.get(d.owner);
+    return named?.size === 1 ? [...named][0] : `${NAME_KEY}${d.owner ?? 'Unassigned'}`;
+  };
+}
 
 // Writes the deal sections, either flat or once per owner or pipeline. Returns whether any
 // section had a row.
-function dealSections(out, sections, r, groupBy) {
+function dealSections(out, sections, r, groupBy, limit) {
   if (!groupBy) {
     const before = out.length;
-    for (const [title, rows] of sections) section(out, title, rows);
+    for (const [title, rows] of sections) section(out, title, rows, limit);
     return out.length > before;
   }
-  const key = groupKey(groupBy);
-  const label = (k) => (groupBy === 'pipeline' ? r.pipelineLabels?.get(k) ?? k : k);
+  const deals = [...r.openDeals, ...sections.flatMap(([, rows]) => rows.map((row) => row[0]))];
+  const key = groupKey(groupBy, deals);
+  // An owner id's name is the one its rows carry, today's first (the open deals lead the list).
+  const ownerNames = new Map();
+  for (const d of deals) if (d.owner_id != null && !ownerNames.has(d.owner_id)) ownerNames.set(d.owner_id, d.owner ?? 'Unassigned');
+  const label = (k) => {
+    if (groupBy === 'pipeline') return r.pipelineLabels?.get(k) ?? k;
+    return ownerNames.get(k) ?? String(k).slice(NAME_KEY.length);
+  };
+  const disambiguate = (g) => (groupBy === 'pipeline' ? g.key : String(g.key).startsWith(NAME_KEY) ? 'no owner id' : `owner ${g.key}`);
   const groups = new Map();
   const group = (k) => {
     if (!groups.has(k)) groups.set(k, { key: k, name: String(label(k)), total: 0, count: 0 });
@@ -151,18 +180,19 @@ function dealSections(out, sections, r, groupBy) {
   // Two pipelines with one label: each heading is followed by its id.
   const named = new Map();
   for (const g of groups.values()) named.set(g.name, (named.get(g.name) ?? 0) + 1);
-  for (const g of groups.values()) if (named.get(g.name) > 1) g.name = `${g.name} (${g.key})`;
+  for (const g of groups.values()) if (named.get(g.name) > 1) g.name = `${g.name} (${disambiguate(g)})`;
   const ordered = [...groups.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name) || String(a.key).localeCompare(String(b.key)));
   for (const g of ordered) {
     out.push(`## ${escapeName(g.name)}, open ${money(g.total)} across ${plural(g.count, 'deal')}`, '');
     const before = out.length;
-    for (const [title, rows] of sections) section(out, title, rows.filter((row) => key(row[0]) === g.key || also(row).includes(g.key)));
+    for (const [title, rows] of sections) section(out, title, rows.filter((row) => key(row[0]) === g.key || also(row).includes(g.key)), limit);
     if (out.length === before) out.push('Nothing flagged.', '');
   }
-  return true;
+  return ordered.length > 0;
 }
 
-export function renderBrief(r, { skipped = [], groupBy = null } = {}) {
+// limit: rows shown per section (the Slack copy may show fewer to fit).
+export function renderBrief(r, { skipped = [], groupBy = null, limit = SECTION_LIMIT } = {}) {
   // The heading claims a week only when the comparison spans one (or there is none yet).
   const words = r.firstRun ? null : comparisonWords(r.previousDate, r.date);
   const heading = !words || words.week ? `week of ${shortDate(r.date)}` : shortDate(r.date);
@@ -171,7 +201,7 @@ export function renderBrief(r, { skipped = [], groupBy = null } = {}) {
   if (skipped.length) out.push('');
   const openLine = `Open pipeline ${money(r.open.total)} across ${plural(r.open.count, 'deal')}`;
   const staleRows = r.stale.map((s) => [s.deal, `${who(s.deal)}: ${staleDetail(s, r.nextStepCheck !== false)}`]);
-  const staleTitle = r.nextStepCheck === false ? 'No activity in 14+ days' : STALE_TITLE;
+  const staleTitle = r.nextStepCheck === false ? `No activity in ${STALE_DAYS}+ days` : STALE_TITLE;
 
   if (r.firstRun) {
     out.push(
@@ -181,19 +211,21 @@ export function renderBrief(r, { skipped = [], groupBy = null } = {}) {
       '',
     );
     if (unknownStageLine(r.unknownStage)) out.push(unknownStageLine(r.unknownStage), '');
-    dealSections(out, [['Close date passed', overdueRows(r)], [staleTitle, staleRows]], r, groupBy);
+    dealSections(out, [['Close date passed', overdueRows(r)], [staleTitle, staleRows]], r, groupBy, limit);
     return out.join('\n');
   }
 
-  const delta = r.open.total - r.previousOpenTotal;
+  // In cents, from the bridge, so the headline and the bridge always agree.
+  const delta = r.bridge ? (r.bridge.end - r.bridge.start) / 100 : r.open.total - r.previousOpenTotal;
   const trend = delta === 0 ? 'flat' : `${delta > 0 ? 'up' : 'down'} ${money(Math.abs(delta))}`;
   out.push(
     r.stateless
       ? `Compared with HubSpot as of ${words.compared}, rebuilt from property history.`
       : `Compared with the snapshot from ${words.compared}.`,
+    ...(r.layoutNotes ?? []).map((n) => `${escapeName(n.label)}: its change log in HubSpot starts after ${shortDate(r.previousDate)}, so its stages on ${shortDate(r.previousDate)} are read from the oldest settings HubSpot kept for it.`),
     '',
     `${openLine}, ${trend} ${words.trend}${leftOut(r)}.`,
-    `Closed ${closedCount(r.won, 'won')} and ${closedCount(r.lost, 'lost')}.`,
+    `Closed ${closedCount(r.won, 'won')} and ${closedCount(r.lost, 'lost')}.${afterClose(r)}`,
     '',
   );
   if (unknownStageLine(r.unknownStage)) out.push(unknownStageLine(r.unknownStage), '');
@@ -211,10 +243,11 @@ export function renderBrief(r, { skipped = [], groupBy = null } = {}) {
     [words.newTitle, r.newDeals.map((d) => [d, who(d)])],
     ['Reopened', r.reopened.map(({ deal, from }) => [deal, `${who(deal)}: was ${from}, now in ${escapeName(deal.stage)}`])],
     ['Closed', [...r.won, ...r.lost].map(closedRow(r))],
+    ['Changed after closing', (r.changedAfterClose ?? []).map((c) => [c.deal, changedAfterCloseText(c)])],
     ['Removed from HubSpot', r.removed.map((d) => [d, `${who(d)}: was open in ${escapeName(d.stage)}, not returned by HubSpot now (deleted, archived or merged)`])],
   ];
   if (r.stateless) sections.push([`Could not rebuild as of ${shortDate(r.previousDate)}`, (r.couldNotRebuild ?? []).map(couldNotRebuildRow(r))]);
-  if (!dealSections(out, sections, r, groupBy)) out.push(`Nothing flagged ${words.period}.`, '');
+  if (!dealSections(out, sections, r, groupBy, limit)) out.push(`Nothing flagged ${words.period}.`, '');
   return out.join('\n');
 }
 
@@ -248,28 +281,40 @@ const couldNotRebuildRow = (r) => (u) => {
   const deal = u.deal ?? u.atT ?? { id: u.id, name: `Deal ${u.id}`, amount: 0, owner: null, pipeline_id: null, url: null };
   const label = u.deal || u.atT ? who(deal) : escapeName(deal.name);
   let text;
-  if (u.reason === 'layout') {
-    text = `its stage on ${then} is not in the pipeline settings HubSpot kept for that date (a deleted pipeline or stage), so its state then is unknown`;
+  if (u.reason === 'layout' && u.cause === 'pipeline') {
+    text = `its pipeline on ${then} has since been deleted, so its stage and state then are unknown`;
+  } else if (u.reason === 'layout') {
+    text = `its stage on ${then} is not in the settings HubSpot kept for that pipeline on that date (a deleted stage), so its state then is unknown`;
+  } else if (u.reason === 'no-stage') {
+    text = `HubSpot's history holds no stage for it on ${then}, so its state then is unknown`;
   } else if (u.reason === 'merged') {
     text = `merged since ${then} from records ${listWords(u.sources ?? [])}, so what they held then is unknown`;
   } else {
     const words = listWords([...new Set(u.fields.map((f) => FIELD_WORDS[f] ?? f))]);
     const state = u.partial ? `; ${u.atT.status} then${u.atT.status === 'open' ? ` at ${exactMoney(cents(u.atT.amount))}` : ''}` : ', so its state then is unknown';
-    text = `more than 20 changes to its ${words} since ${then}${state}`;
+    text = `more than ${HISTORY_CAP} changes to its ${words} since ${then}${state}`;
   }
   // The amount then, when its history can answer, even if the state then cannot be rebuilt.
   if (!u.partial && u.atT && !u.fields.includes('amount')) text += ` (amount then ${exactMoney(cents(u.atT.amount))})`;
   const removed = r.removed?.some((x) => x.id === u.id) ? ' (also under Removed from HubSpot)' : '';
-  return [deal, `${label}: ${text}${u.deal ? '' : `, gone from HubSpot now${removed}`}`];
+  // Closed today: which way, since its state then (and so whether it closed this week) is unknown.
+  const now = u.deal && u.deal.status !== 'open' ? `; ${u.deal.status} now` : '';
+  return [deal, `${label}: ${text}${u.deal ? now : `, gone from HubSpot now${removed}`}`];
 };
+
+// Closed at both ends of the comparison: a flip between won and lost, or a closed amount that
+// moved. Counted apart from the deals closed this week.
+const afterClose = (r) => (r.changedAfterClose?.length ? ` ${plural(r.changedAfterClose.length, 'deal')} changed after closing.` : '');
+function changedAfterCloseText({ deal, fromStatus, fromAmount, amountMoved, note }) {
+  const amounts = amountMoved ? `${exactMoney(cents(fromAmount))} → ${exactMoney(cents(deal.amount))}${noted(note)}` : '';
+  if (fromStatus === deal.status) return `${who(deal)}: ${deal.status} amount ${amounts}`;
+  return `${who(deal)}: was ${fromStatus}, now ${deal.status}${amounts ? `, ${amounts}` : ''}`;
+}
 
 function closedCount(deals, label) {
   return deals.length ? `${deals.length} ${label} (${money(sum(deals))})` : `0 ${label}`;
 }
 
-function sum(deals) {
-  return deals.reduce((n, d) => n + d.amount, 0);
-}
 
 const slackEscape = (text) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 

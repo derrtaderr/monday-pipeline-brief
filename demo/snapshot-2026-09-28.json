@@ -479,6 +479,22 @@
       "next_step": "Hand to renewals",
       "last_activity": "2026-09-26",
       "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D127"
+    },
+    {
+      "id": "D128",
+      "name": "Ironbridge Logistics",
+      "owner": "Marcus",
+      "pipeline_id": "default",
+      "pipeline": "Sales Pipeline",
+      "stage_id": "closedwon",
+      "stage": "Closed won",
+      "stage_order": 5,
+      "status": "won",
+      "amount": 45000,
+      "close_date": "2026-09-24",
+      "next_step": "",
+      "last_activity": "2026-09-26",
+      "url": "https://app.hubspot.com/contacts/1234567/record/0-3/D128"
     }
   ]
 }

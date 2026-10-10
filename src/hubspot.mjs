@@ -7,7 +7,7 @@ const BASE = 'https://api.hubapi.com';
 const MAX_RETRIES = 5;
 const MAX_WAIT_SECONDS = 60;
 export const DEAL_PROPERTIES = [
-  'dealname', 'amount', 'amount_in_home_currency', 'closedate', 'dealstage', 'pipeline', 'hubspot_owner_id', 'hs_next_step', 'notes_last_updated', 'createdate',
+  'dealname', 'amount', 'amount_in_home_currency', 'deal_currency_code', 'closedate', 'dealstage', 'pipeline', 'hubspot_owner_id', 'hs_next_step', 'notes_last_updated', 'createdate',
 ];
 // Stateless mode also reads which records a deal absorbed in a merge (no history needed).
 export const HISTORY_READ_PROPERTIES = [...DEAL_PROPERTIES, 'hs_merged_object_ids'];

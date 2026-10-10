@@ -566,3 +566,97 @@ test('a pipeline label shared with another pipeline carries its id on a transfer
   const out = renderBrief(compare(prev, curr, '2026-10-05', { largeDeal: false }));
   assert.ok(out.includes('- Tess, $10K, Dana: Sales (east) (Qualified) → Renewals (Qualified)\n'), out);
 });
+
+// F1 repro: deal 9 won at $250K last week, lost this week.
+test('a deal won last week and lost this week is listed under Changed after closing, flat, grouped and in Slack', () => {
+  const prev = snap('2026-09-28', [deal({ id: '9', name: 'Ironbridge', amount: 250000, status: 'won' }), deal({ id: 'o', amount: 1000 })]);
+  const curr = snap('2026-10-05', [deal({ id: '9', name: 'Ironbridge', amount: 250000, status: 'lost' }), deal({ id: 'o', amount: 1000 }),
+    deal({ id: '10', name: 'Keystone', owner: 'Leo', amount: 60000, status: 'won' })]);
+  prev.deals.push(deal({ id: '10', name: 'Keystone', owner: 'Leo', amount: 50000, status: 'won' }));
+  const r = compare(prev, curr, '2026-10-05');
+  const out = renderBrief(r);
+  assert.match(out, /Closed 0 won and 0 lost\. 2 deals changed after closing\.\n/);
+  assert.ok(out.includes('**Changed after closing** (2)\n- Ironbridge, $250K, Dana: was won, now lost\n- Keystone, $60K, Leo: won amount $50,000 → $60,000\n'), out);
+  assert.doesNotMatch(out, /Nothing flagged/);
+  assert.doesNotMatch(out, /\*\*Closed\*\*/);
+  const grouped = renderBrief(r, { groupBy: 'owner' });
+  assert.match(grouped, /## Leo[^\n]*\n\n\*\*Changed after closing\*\* \(1\)\n- Keystone, \$60K, Leo: won amount \$50,000 → \$60,000\n/);
+  assert.match(toSlack(out), /\*Changed after closing\* \(2\)\n• Ironbridge, \$250K, Dana: was won, now lost\n/);
+  const both = compare(snap('2026-09-28', [deal({ id: '9', name: 'Ironbridge', amount: 250000, status: 'won' })]),
+    snap('2026-10-05', [deal({ id: '9', name: 'Ironbridge', amount: 200000, status: 'lost' })]), '2026-10-05');
+  assert.match(renderBrief(both), /- Ironbridge, \$200K, Dana: was won, now lost, \$250,000 → \$200,000\n/);
+  assert.match(renderBrief(both), /Closed 0 won and 0 lost\. 1 deal changed after closing\.\n/);
+});
+
+// F4: --group-by owner keys on the owner id, so two reps who share a name stay two groups.
+test('grouping by owner keys on owner_id; a row from an older snapshot joins the id that carries its name today', () => {
+  const prev = snap('2026-09-28', [
+    deal({ id: 'gone', name: 'Old Deal', owner: 'Leo', amount: 5000 }), // an older snapshot: no owner_id
+  ]);
+  const curr = snap('2026-10-05', [
+    deal({ id: 'a', name: 'Alpha', owner: 'Dana', owner_id: '1', amount: 30000, next_step: '' }),
+    deal({ id: 'b', name: 'Beta', owner: 'Dana', owner_id: '2', amount: 20000, next_step: '' }),
+    deal({ id: 'c', name: 'Gamma', owner: 'Leo', owner_id: '3', amount: 10000, next_step: '' }),
+  ]);
+  const out = renderBrief(compare(prev, curr, '2026-10-05'), { groupBy: 'owner' });
+  assert.deepEqual([...out.matchAll(/^## (.+), open/gm)].map((m) => m[1]), ['Dana (owner 1)', 'Dana (owner 2)', 'Leo']);
+  const leo = out.slice(out.indexOf('## Leo'));
+  assert.match(leo, /Old Deal/);
+  assert.match(leo, /Gamma/);
+});
+
+// F7: the home-currency amount moved, the deal's own amount and currency did not: an exchange rate.
+test('an amount change from the exchange rate alone is labelled, open or closed; older snapshots get no label', () => {
+  const fx = (id, home, own, status = 'open') => deal({ id, name: `Deal ${id}`, amount: home, deal_currency: 'EUR', deal_currency_amount: own, status });
+  const prev = snap('2026-09-28', [fx('a', 26400, 24000), fx('b', 26400, 24000), fx('c', 11000, 10000, 'won'), deal({ id: 'd', name: 'Deal d', amount: 5000 })]);
+  const curr = snap('2026-10-05', [fx('a', 26880, 24000), fx('b', 27500, 25000), fx('c', 11200, 10000, 'won'), deal({ id: 'd', name: 'Deal d', amount: 5200 })]);
+  const out = renderBrief(compare(prev, curr, '2026-10-05'));
+  assert.match(out, /- Deal a, \$27K, Dana: \$26,400 → \$26,880 \(exchange rate\)\n/);
+  assert.match(out, /- Deal b, \$28K, Dana: \$26,400 → \$27,500\n/);
+  assert.match(out, /- Deal d, \$5K, Dana: \$5,000 → \$5,200\n/);
+  // A closed deal moved only by the exchange rate is not a change after closing: not listed, not counted.
+  assert.doesNotMatch(out, /Deal c/);
+  assert.doesNotMatch(out, /changed after closing/);
+});
+
+// an old foreign-currency closed deal would otherwise be listed every week.
+test('a closed deal whose home amount moved only with the exchange rate is never listed or counted; a flip still is', () => {
+  const won = (id, home, status = 'won') => deal({ id, name: `Deal ${id}`, amount: home, deal_currency: 'EUR', deal_currency_amount: 1000, status });
+  const prev = snap('2026-09-28', [won('w', 1100), won('f', 1100)]);
+  const curr = snap('2026-10-05', [won('w', 1150), won('f', 1150, 'lost')]);
+  const r = compare(prev, curr, '2026-10-05');
+  assert.deepEqual(r.changedAfterClose.map((c) => c.deal.id), ['f']);
+  const out = renderBrief(r);
+  assert.match(out, /Closed 0 won and 0 lost\. 1 deal changed after closing\.\n/);
+  assert.match(out, /- Deal f, \$1K, Dana: was won, now lost, \$1,100 → \$1,150 \(exchange rate\)\n/);
+  assert.doesNotMatch(out, /Deal w/);
+});
+
+// the first comparison after upgrading has no currency fields last week. A
+// foreign-currency deal (its own amount differs from its home amount) cannot be told apart from
+// an exchange-rate move, so its amount change says so; a home-currency deal's change is a real edit.
+test('in the first week after upgrading, a foreign-currency amount change says the currency last week is unknown', () => {
+  const old = (id, home, status) => deal({ id, name: `Deal ${id}`, amount: home, status });
+  const now = (id, home, own, cur, status) => deal({ id, name: `Deal ${id}`, amount: home, deal_currency: cur, deal_currency_amount: own, status });
+  const prev = snap('2026-09-28', [old('a', 1100, 'won'), old('b', 2000, 'won'), old('c', 5000, 'open')]);
+  const curr = snap('2026-10-05', [now('a', 1150, 1000, 'EUR', 'won'), now('b', 2500, 2500, 'USD', 'won'), now('c', 5500, 5000, 'EUR', 'open')]);
+  const out = renderBrief(compare(prev, curr, '2026-10-05'));
+  assert.match(out, /- Deal a, \$1K, Dana: won amount \$1,100 → \$1,150 \(currency unknown last week\)\n/);
+  assert.match(out, /- Deal b, \$3K, Dana: won amount \$2,000 → \$2,500\n/);
+  assert.match(out, /- Deal c, \$6K, Dana: \$5,000 → \$5,500 \(currency unknown last week\)\n/);
+});
+
+
+// The headline change is the bridge's end minus its start, in cents, so a float sum can never
+// print "down $0" when the bridge says nothing moved.
+test('the headline change comes from the bridge cents, not a float sum', () => {
+  const prev = snap('2026-09-28', [deal({ id: 'a', amount: 0.1 }), deal({ id: 'b', amount: 0.2 })]);
+  const curr = snap('2026-10-05', [deal({ id: 'a', amount: 0.3 }), deal({ id: 'b', amount: 0 })]);
+  const out = renderBrief(compare(prev, curr, '2026-10-05'));
+  assert.match(out, /Open pipeline \$0 across 2 deals, flat on last week\./);
+});
+
+test('a grouped brief with nothing in any group still ends with its closing line', () => {
+  const r = compare(snap('2026-09-28', []), snap('2026-10-05', []), '2026-10-05');
+  for (const groupBy of ['owner', 'pipeline']) assert.match(renderBrief(r, { groupBy }), /Nothing flagged this week\.\n$/);
+});

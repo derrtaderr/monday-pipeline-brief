@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { demoBrief } from '../src/cli.mjs';
 
 const README = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+const VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 // Scheduling stored mode with cron or launchd is an appendix at the end of the README.
 const SCHEDULE = '## Appendix: schedule stored mode with cron or launchd';
 const scheduleSection = () => {
@@ -28,9 +29,10 @@ test('readme states exactly what the stale next step check reads', () => {
   assert.match(README, /notes_last_updated/);
 });
 
-test('readme lists the two read scopes', () => {
+test('readme lists the three read scopes', () => {
   assert.match(README, /crm\.objects\.deals\.read/);
   assert.match(README, /crm\.objects\.owners\.read/);
+  assert.match(README, /settings\.currencies\.read/);
 });
 
 test('readme only shows commands that exist for clone and npx users', () => {
@@ -107,7 +109,10 @@ test('readme warns macOS users that scheduled jobs cannot read Documents, Deskto
 test('readme explains scheduled versus ad-hoc runs and a Mac asleep at the scheduled time', () => {
   const schedule = scheduleSection();
   assert.match(schedule, /by hand mid-week/);
-  assert.match(schedule, /at least 6 days old/);
+  assert.match(schedule, /7 or 8 days old/);
+  assert.match(schedule, /Tuesday/);
+  const flow = readFileSync(new URL('../.vibecodepm/flow.md', import.meta.url), 'utf8');
+  assert.match(flow.split('\n').find((l) => l.startsWith('| Ad-hoc mid-week run')), /7 or 8 days old/);
   assert.match(schedule, /asleep/);
   assert.match(schedule, /2 weeks ago/);
   assert.match(schedule, /launchctl bootstrap gui\/\$\(id -u\)/);
@@ -400,4 +405,71 @@ test('Did it help? and metrics.md count a stateless first run with changes as ac
   assert.ok(metrics.includes('## v0.3'), 'metrics.md has a v0.3 section');
   assert.match(v03, /first `run --since 7d`/);
   assert.match(v03, /activation/i);
+});
+
+test('the README and the Action pin the release this package.json describes', () => {
+  const action = readFileSync(new URL('../examples/github-action.yml', import.meta.url), 'utf8');
+  for (const [name, text] of [['README', README], ['Action', action]]) {
+    const pins = [...text.matchAll(/github:derrtaderr\/monday-pipeline-brief#(\S+)/g)].map((m) => m[1]);
+    assert.ok(pins.length, `${name} pins a release`);
+    for (const pin of pins) assert.equal(pin, `v${VERSION}`, `${name} pins #${pin}, package.json is ${VERSION}`);
+  }
+});
+
+// F3: a git tag can be moved by whoever controls the repository, so pinning the tag is not a
+// guarantee; a commit SHA is. Every action the workflow uses is pinned by full commit SHA.
+test('the pinning note is honest about tags and says how to pin a commit SHA instead', () => {
+  assert.doesNotMatch(README, /never runs with your HubSpot token until you change the tag/);
+  const note = README.slice(README.indexOf('### Run it every week with GitHub Actions'), README.indexOf('## Stateless mode'));
+  assert.match(note, /tag can be moved/);
+  assert.ok(note.includes(`git ls-remote https://github.com/derrtaderr/monday-pipeline-brief refs/tags/v${VERSION}`), 'how to find the SHA');
+  const action = readFileSync(new URL('../examples/github-action.yml', import.meta.url), 'utf8');
+  assert.match(action, /# [^\n]*commit SHA[^\n]*\n/);
+  const uses = [...action.matchAll(/uses: (\S+)(.*)/g)];
+  assert.ok(uses.length);
+  for (const [, ref, rest] of uses) {
+    assert.match(ref, /@[0-9a-f]{40}$/, `${ref} is pinned by full commit SHA`);
+    assert.match(rest, /# v\d+\.\d+\.\d+/, `${ref} says which version the SHA is`);
+  }
+});
+
+// F7: amount_in_home_currency moves with exchange rates, so stored mode on a multi-currency
+// portal is not simply "works": rate moves show as amount changes, labelled when the tool can tell.
+test('the readme and the refusal no longer say stored mode simply works on a multi-currency portal', async () => {
+  const { MULTI_CURRENCY_MESSAGE } = await import('../src/stateless.mjs');
+  assert.doesNotMatch(README, /works on any portal|stored mode below works there/i);
+  assert.doesNotMatch(MULTI_CURRENCY_MESSAGE, /work on any portal/);
+  const lim = README.slice(README.indexOf('## Limitations'), README.indexOf('## Did it help?'));
+  assert.match(lim.split('\n').find((l) => l.startsWith('- Amounts:')), /exchange rate[^\n]*\(exchange rate\)/);
+});
+
+test('the readme says how fast stored snapshots grow and how to prune them by hand; the tool deletes nothing', () => {
+  const data = README.slice(README.indexOf('## Where your data goes'), README.indexOf('## Exit codes'));
+  assert.match(data, /half a kilobyte per deal/);
+  assert.match(data, /never deletes/);
+  assert.ok(data.includes("find ~/.monday-pipeline-brief -name 'snapshot-*.json' -mtime +35 -delete"));
+});
+
+test('flow.md shows only the pinned npx command and names the v0.3.1 states', () => {
+  const flow = readFileSync(new URL('../.vibecodepm/flow.md', import.meta.url), 'utf8');
+  assert.doesNotMatch(flow, /npx (--yes )?github:derrtaderr\/monday-pipeline-brief(?!#v)/, 'no unpinned npx');
+  assert.ok(flow.includes(`npx github:derrtaderr/monday-pipeline-brief#v${VERSION} demo`));
+  assert.match(flow, /\| Two owners with the same name \|[^\n]*\(owner /);
+  assert.match(flow, /\| Brief too long for Slack \|[^\n]*largest deals here to fit Slack/);
+  assert.match(flow, /\| Pipeline change log starts after the comparison date[^|\n]*\|[^\n]*oldest settings HubSpot kept/);
+});
+
+test('the readme says snapshots hold the owner label, which can include an email', () => {
+  const data = README.slice(README.indexOf('## Where your data goes'), README.indexOf('## Exit codes'));
+  assert.match(data, /owner label[^\n]*email/);
+});
+
+test('the SHA recipe peels the tag and says release tags are lightweight, and the Action section says where secrets live', () => {
+  const note = README.slice(README.indexOf('### Run it every week with GitHub Actions'), README.indexOf('## Stateless mode'));
+  // Both refs: a lightweight tag answers on the first, an annotated one on the peeled ^{} line.
+  assert.ok(note.includes(`git ls-remote https://github.com/derrtaderr/monday-pipeline-brief refs/tags/v${VERSION} 'refs/tags/v${VERSION}^{}'`));
+  assert.match(note, /lightweight/);
+  assert.match(note, /Settings → Secrets and variables → Actions/);
+  const action = readFileSync(new URL('../examples/github-action.yml', import.meta.url), 'utf8');
+  assert.ok(action.includes(`refs/tags/v${VERSION}^{}`));
 });

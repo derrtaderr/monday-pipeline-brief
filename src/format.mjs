@@ -1,13 +1,22 @@
 // Small formatting helpers shared by the brief renderer.
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const DAY_MS = 86400000;
+export const DAY_MS = 86400000;
 
+// The sum of the deals' amounts.
+export const sumAmounts = (deals) => deals.reduce((n, d) => n + d.amount, 0);
+
+// Short dollars for headlines and deal lines: $750, $24K, $1.25M, $1.00B. Each unit takes over
+// where the smaller one would round to 1,000 of itself ($999,500 is $1.00M, never $1,000K), and
+// an amount that rounds to zero is $0, never -$0.
 export function money(n) {
-  if (n < 0) return `-${money(-n)}`;
-  if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
-  if (n >= 1000) return `$${Math.round(n / 1000).toLocaleString('en-US')}K`;
-  return `$${Math.round(n)}`;
+  const abs = Math.abs(n);
+  if (Math.round(abs) === 0) return '$0';
+  const sign = n < 0 ? '-' : '';
+  if (Math.round(abs / 1e4) >= 100000) return `${sign}$${(abs / 1e9).toFixed(2)}B`;
+  if (Math.round(abs / 1000) >= 1000) return `${sign}$${(abs / 1e6).toFixed(2)}M`;
+  if (Math.round(abs) >= 1000) return `${sign}$${Math.round(abs / 1000).toLocaleString('en-US')}K`;
+  return `${sign}$${Math.round(abs)}`;
 }
 
 // Exact dollars from integer cents, for lines that must visibly add up: $1,094,000 or $0.30.

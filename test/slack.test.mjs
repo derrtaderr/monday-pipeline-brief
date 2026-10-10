@@ -67,7 +67,12 @@ test('Slack text is capped under 35,000 characters on a line boundary with a not
   const long = Array.from({ length: 2000 }, (_, i) => `- Deal ${i}, $1K, Dana: no next step`).join('\n');
   const text = slackText(long);
   assert.ok(text.length <= 35000, `got ${text.length}`);
-  assert.match(text, /• Deal \d+, \$1K, Dana: no next step\n_Brief cut short for Slack\. The full brief is in the saved file\._$/);
+  assert.match(text, /• Deal \d+, \$1K, Dana: no next step\n_Brief cut short for Slack\. Run with --out FILE for the full brief\._$/);
+  const saved = slackText(long, { saved: '/home/a/.monday-pipeline-brief/brief-2026-10-05.md' });
+  assert.ok(saved.length <= 35000);
+  // Slack never gets a local path (it would show the home folder): the file name only.
+  assert.match(saved, /\n_Brief cut short for Slack\. The full brief is saved as brief-2026-10-05\.md on the machine that ran it\._$/);
+  assert.doesNotMatch(saved, /\/home\/a/);
   assert.equal(slackText('- short'), '• short');
 });
 
@@ -109,3 +114,26 @@ for (const [name, hook] of Object.entries(BAD_HOOKS)) {
     }
   });
 }
+
+// F6: too long for Slack, the brief keeps every heading by showing fewer rows per section.
+test('a brief too long for Slack drops the lowest rows in each section before cutting anything', async () => {
+  const { slackText } = await import('../src/slack.mjs');
+  const { compare } = await import('../src/compare.mjs');
+  const { renderBrief } = await import('../src/render.mjs');
+  const deals = [];
+  for (let rep = 0; rep < 40; rep++) {
+    for (let i = 0; i < 12; i++) {
+      deals.push({ id: `${rep}-${i}`, name: `A deal with a fairly long company name number ${i}`, owner: `Rep ${rep}`, owner_id: String(rep), pipeline_id: 'p', stage_order: 1, status: 'open', amount: 1000 * (i + 1), close_date: '2026-09-01', next_step: '', last_activity: '2026-10-04' });
+    }
+  }
+  const r = compare(null, { date: '2026-10-05', deals }, '2026-10-05');
+  const full = renderBrief(r, { groupBy: 'owner' });
+  const text = slackText((limit) => renderBrief(r, { groupBy: 'owner', limit }), { saved: null });
+  assert.ok(toSlackLength(full) > 35000, 'the full brief does not fit');
+  assert.ok(text.length <= 35000, `got ${text.length}`);
+  for (let rep = 0; rep < 40; rep++) assert.ok(text.includes(`*Rep ${rep}, open`), `Rep ${rep} keeps its heading`);
+  assert.match(text, /• and \d+ more \(\$\d+K\)/);
+  assert.match(text, /\n_Each section shows its \d+ largest deals here to fit Slack\. Run with --out FILE for the full brief\._$/);
+  assert.doesNotMatch(text, /cut short/);
+});
+const toSlackLength = (md) => md.length;

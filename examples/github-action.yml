@@ -13,14 +13,19 @@ jobs:
   brief:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
+      # #v0.3.1 pins the release tag. A tag can be moved by whoever controls the repository; for a
+      # pin nobody can move, replace #v0.3.1 below with the commit SHA the tag points at:
+      #   git ls-remote https://github.com/derrtaderr/monday-pipeline-brief refs/tags/v0.3.1 'refs/tags/v0.3.1^{}'
+      # Release tags here are lightweight, so the first line's SHA is the commit; a line ending
+      # ^{} (an annotated tag) would name the commit instead.
       # The brief goes to Slack. Its printed copy is thrown away, so deal names never
       # reach the workflow log, which anyone with read access to the repository can open.
       - run: |
           test -n "$SLACK_WEBHOOK_URL" || { echo "::error::Add the SLACK_WEBHOOK_URL secret: this job sends the brief to Slack only."; exit 1; }
-          npx --yes github:derrtaderr/monday-pipeline-brief#v0.3.0 run --since 7d > /dev/null
+          npx --yes github:derrtaderr/monday-pipeline-brief#v0.3.1 run --since 7d > /dev/null
         env:
           HUBSPOT_TOKEN: ${{ secrets.HUBSPOT_TOKEN }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

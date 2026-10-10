@@ -1,6 +1,6 @@
 {
   "name": "monday-pipeline-brief",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Know what changed in your HubSpot pipeline before Monday's meeting. A weekly brief that runs on your side, zero dependencies.",
   "type": "module",
   "bin": {

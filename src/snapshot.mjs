@@ -18,9 +18,37 @@ function dealAmount(p) {
   return Number(p.amount) || 0;
 }
 
+function numberOrNull(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 function ownerName(o) {
   const full = `${o.firstName ?? ''} ${o.lastName ?? ''}`.trim();
   return full || o.email || `Owner ${o.id}`;
+}
+
+// Each owner id's display name. Two owners (two ids) with one name are told apart the way two
+// pipelines with one label are: by email when that tells them apart, else by owner id.
+function ownerLabels(owners) {
+  const byId = new Map();
+  for (const o of owners) if (!byId.has(String(o.id))) byId.set(String(o.id), o);
+  const named = new Map();
+  for (const [id, o] of byId) {
+    const name = ownerName(o);
+    if (!named.has(name)) named.set(name, []);
+    named.get(name).push(id);
+  }
+  const labels = new Map();
+  for (const [name, ids] of named) {
+    for (const id of ids) {
+      const email = byId.get(id).email;
+      const unique = email && ids.filter((x) => byId.get(x).email === email).length === 1;
+      labels.set(id, ids.length === 1 ? name : `${name} (${unique ? email : `owner ${id}`})`);
+    }
+  }
+  return labels;
 }
 
 // isClosed decides open or closed when HubSpot sends it ("true"/"false" or a boolean), and
@@ -48,7 +76,7 @@ export function buildSnapshot({ deals, pipelines, owners, takenAt, date, source 
       stages.set(`${p.id}/${s.id}`, { label: s.label, order: s.displayOrder, status: stageStatus(s.metadata) });
     }
   }
-  const ownerNames = new Map(owners.map((o) => [String(o.id), ownerName(o)]));
+  const ownerNames = ownerLabels(owners);
   // Paging can return a deal twice when deals change mid-listing. Keep the first copy.
   const seen = new Set();
   const unique = deals.filter((d) => !seen.has(String(d.id)) && seen.add(String(d.id)));
@@ -75,6 +103,7 @@ export function buildSnapshot({ deals, pipelines, owners, takenAt, date, source 
         id: String(d.id),
         name: p.dealname ?? `Deal ${d.id}`,
         owner: ownerId ? ownerNames.get(ownerId) ?? `Owner ${ownerId}` : 'Unassigned',
+        owner_id: ownerId,
         pipeline_id: p.pipeline ?? null,
         pipeline: pipelineLabels.get(p.pipeline) ?? p.pipeline ?? null,
         stage_id: p.dealstage ?? null,
@@ -82,6 +111,10 @@ export function buildSnapshot({ deals, pipelines, owners, takenAt, date, source 
         stage_order: stage?.order ?? null,
         status: stage?.status ?? 'open',
         amount: dealAmount(p),
+        // The deal's own currency and its amount in it, so a brief can tell an exchange-rate move
+        // of the home-currency amount from a real change. Null when HubSpot does not return them.
+        deal_currency: p.deal_currency_code || null,
+        deal_currency_amount: numberOrNull(p.amount),
         close_date: isoDay(p.closedate),
         next_step: (p.hs_next_step ?? '').trim(),
         last_activity: isoDay(p.notes_last_updated),

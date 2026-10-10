@@ -27,7 +27,7 @@ test('the demo brief shows every section the brief can write', () => {
   assert.deepEqual(titles, [
     'How the open pipeline changed', 'Look at these first', 'Close date passed', 'Slipped close dates',
     'Moved back a stage', 'No next step, or no activity in 14+ days', 'Moved forward', 'Changed stage', 'Moved to another pipeline', 'Amount changed',
-    'New this week', 'Reopened', 'Closed', 'Removed from HubSpot',
+    'New this week', 'Reopened', 'Closed', 'Changed after closing', 'Removed from HubSpot',
   ]);
 });
 
@@ -72,4 +72,10 @@ test('the demo shows a stage change out of a deleted stage, and a close straight
   assert.ok(stages(prev).includes('Paused') && !stages(curr).includes('Paused'), 'Paused was deleted between the weeks');
   const grouped = strip(demo({ groupBy: 'pipeline' }));
   assert.equal(grouped.match(/Harbor Freightworks, \$15K, Leo: won, moved from Sales Pipeline to Renewals/g).length, 2);
+});
+
+test('the demo shows a deal won last week and lost this week under Changed after closing, outside the Closed counts', () => {
+  const out = strip(demo());
+  assert.match(out, /\*\*Changed after closing\*\* \(1\)\n- Ironbridge Logistics, \$45K, Marcus: was won, now lost\n/);
+  assert.match(out, /Closed 3 won \(\$135K\) and 1 lost \(\$90K\)\. 1 deal changed after closing\.\n/);
 });

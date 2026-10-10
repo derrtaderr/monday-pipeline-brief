@@ -229,9 +229,14 @@ test('rebuildAt: a merged record with a MERGE_OBJECTS version after T could not 
   assert.deepEqual(rebuildAt([merged], new Date(at(40))).unknown, []);
 });
 
-test('rebuildAt: a backdated import with an uncapped stage history is still absent before its first stage version', () => {
+// A deal with versions of other properties at or before T existed then; with no stage version
+// at T its state then is unknown, so it is never New.
+test('rebuildAt: a deal that existed at T but has no stage version then could not be rebuilt; it is never absent or new', () => {
   const imported = deal('13', { dealstage: [{ value: 's1', timestamp: at(30) }] }, { createdAt: '2026-09-01T00:00:00Z' });
-  assert.deepEqual(rebuildAt([imported], T), { deals: [], unknown: [] });
+  const r = rebuildAt([imported], T);
+  assert.deepEqual(r.deals, []);
+  assert.deepEqual(r.unknown.map(({ id, reason, fields }) => ({ id, reason, fields })), [{ id: '13', reason: 'no-stage', fields: ['stage_id', 'status', 'stage_order'] }]);
+  assert.equal(r.unknown[0].properties.amount, '100');
 });
 
 test('archivedBatches keeps only deals archived after T, in batch-read chunks of 50', () => {
@@ -290,4 +295,11 @@ test('rebuildAt: a capped deal carries its properties at T, with every property 
   const [v] = rebuildAt([deal('24', { dealstage: versions(20, 10), amount: versions(20, 10, (i) => String(i)) })], T).unknown;
   assert.equal(v.properties.amount, null);
   assert.equal(v.properties.dealstage, null);
+});
+
+// m2: a deal listed twice in the recycle bin (a paging overlap) is read once, so the batch
+// read returns as many deals as it was asked for.
+test('archivedBatches reads each deal id once', () => {
+  const list = [{ id: '1', archivedAt: '2026-10-09T00:00:00Z' }, { id: 1, archivedAt: '2026-10-09T00:00:00Z' }, { id: '2', archivedAt: '2026-10-09T00:00:00Z' }];
+  assert.deepEqual(archivedBatches(list, new Date('2026-10-05T00:00:00Z')), [['1', '2']]);
 });
