@@ -1,6 +1,23 @@
-# monday-pipeline-brief
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/monday-pipeline-brief-wordmark-dark.png">
+    <img src="assets/monday-pipeline-brief-wordmark-light.png" alt="monday-pipeline-brief" width="560">
+  </picture>
+  <br>
+  Know what changed in your HubSpot pipeline before Monday's meeting.
+</p>
 
-Know what changed in your HubSpot pipeline before Monday's meeting.
+<p align="center">
+  <img src="https://img.shields.io/badge/node-%E2%89%A520-339933?logo=nodedotjs&logoColor=white" alt="Node 20 or newer">
+  <img src="https://img.shields.io/badge/dependencies-0-F97316" alt="Zero dependencies">
+  <img src="https://img.shields.io/badge/demo-no%20key-8B949E" alt="Demo runs without a HubSpot key">
+</p>
+
+<p align="center">
+  <a href="#what-the-brief-looks-like">
+    <img src="assets/monday-pipeline-brief-demo.gif" alt="Running node bin/monday-brief.mjs demo on a fictional pipeline: open pipeline $1.29M across 23 deals, up $131K on last week, then how the open pipeline changed, dollar for dollar, from $1,155,000 to $1,286,000." width="760">
+  </a>
+</p>
 
 It compares your HubSpot deals today with how they stood a week ago and writes a short brief: where the open pipeline went, dollar for dollar, which close dates slipped or passed, which deals moved back, changed amount, went quiet or left HubSpot, and the few deals to look at first, each with the reason it is there. Every deal links straight to its record in HubSpot.
 

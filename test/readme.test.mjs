@@ -297,7 +297,9 @@ test('the readme stale definition covers deals with no logged activity by their 
 
 test('the opener promises the outcome and claims nothing about what HubSpot cannot do', () => {
   const top = README.slice(0, README.indexOf('## What the brief looks like'));
-  assert.match(top.split('\n')[2], /^Know what changed in your HubSpot pipeline before Monday's meeting\./);
+  // The opener is the first line of prose, after the centered header markup (wordmark, badges, demo GIF).
+  const opener = top.split('\n').map((l) => l.trim()).find((l) => l && !l.startsWith('<') && !l.startsWith('#'));
+  assert.match(opener, /^Know what changed in your HubSpot pipeline before Monday's meeting\./);
   assert.doesNotMatch(top, /HubSpot stores|only current state|right now, not what changed|can't produce|cannot produce/i);
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   assert.doesNotMatch(pkg.description, /can't produce|cannot produce/i);
