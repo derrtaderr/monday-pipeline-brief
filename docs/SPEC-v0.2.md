@@ -169,10 +169,10 @@ The default is no grouping: one flat brief, which reads best for one pipeline an
 The README opener drops the claim that HubSpot stores only current state (HubSpot does keep
 property history). It opens on the outcome: know what changed in your HubSpot pipeline before
 Monday's meeting. No competitor claims. `package.json`'s description changes the same way.
-The GitHub repo description is outside this repo; the proposed text goes to the orchestrator
+The GitHub repo description is outside this repo; the proposed text goes to the maintainer
 in the pull request body.
 
-## Prior art (checked by the orchestrator)
+## Prior art (checked by the maintainer)
 
 - No open pull requests on the repo.
 - The five earlier lane branches (rows 85 to 89) are merged into main.
@@ -187,7 +187,7 @@ in the pull request body.
    open in both snapshots whose pipeline changed (old pipeline and stage to new), flat and
    grouped; grouped by pipeline, the deal is listed under its old and its new pipeline so the
    old heading never vanishes. A per-pipeline bridge is a candidate for later.
-2. **The orchestrator handoff notes are in the pull request body, not a file in the repo.**
+2. **The maintainer's handoff notes are in the pull request body, not a file in the repo.**
    The repo's lint gate (and its test) forbid a maker-notes file at the root and the word that
    names it in any file, because this repo is squashed into the public one. Writing that file
    would turn the suite red. The exact old and new strings are in the PR body instead.
